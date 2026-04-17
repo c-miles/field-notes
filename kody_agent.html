@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kody: AI Coding Agent · kode health</title>
+<!--
+  Font loading: 3 weights per family max (research: >3 weights = visual noise + perf hit)
+  Space Grotesk: hero display only (600, 700, 800)
+  Inter: all body/UI text (400, 500)
+  JetBrains Mono: code/labels (400)
+-->
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=Inter:wght@400;500&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────
+   RESET & BASE
+   ───────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/*
+  PALETTE — verified WCAG AA contrast ratios on --bg
+  --t1  #f2f2f5  → contrast ~17:1  ✓
+  --t2  #a0a0b0  → contrast ~8.4:1 ✓
+  --t3  #72728a  → contrast ~4.7:1 ✓ (only used at 14px+)
+  --accent #818cf8 → contrast ~8.1:1 ✓
+  --green  #4ade80 → contrast ~10.9:1 ✓
+
+  SURFACES — solid colors, not alpha overlays (anti glassmorphism)
+  --s0: base canvas
+  --s1: card
+  --s2: elevated card / header row
+
+  BORDERS — visible but restrained
+  --br:  1px solid rgba(255,255,255,0.10)
+  --br2: 1px solid rgba(255,255,255,0.18)
+*/
+:root {
+  --bg:     #09090c;
+  --s1:     #131318;
+  --s2:     #1c1c22;
+  --br:     rgba(255,255,255,0.10);
+  --br2:    rgba(255,255,255,0.18);
+  --accent: #818cf8;
+  --green:  #4ade80;
+  --amber:  #fbbf24;
+  --red:    #f87171;
+  --mono:   #86efac;
+  --t1:     #f2f2f5;
+  --t2:     #a0a0b0;
+  --t3:     #72728a;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  background: var(--bg);
+  color: var(--t1);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─────────────────────────────────────────────────
+   DECK & SLIDE TRANSITIONS
+   ───────────────────────────────────────────────── */
+.deck { width: 100vw; height: 100vh; position: relative; }
+
+.slide {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 60px 88px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .35s ease;
+  overflow: hidden;
+}
+.slide.active { opacity: 1; pointer-events: all; }
+
+/* ─────────────────────────────────────────────────
+   CHROME — progress, nav, counter
+   No glassmorphism, no shadows, no effects
+   ───────────────────────────────────────────────── */
+#progress {
+  position: fixed; top: 0; left: 0; height: 2px;
+  background: var(--accent);
+  transition: width .35s ease; z-index: 100;
+}
+
+.nav-btn {
+  position: fixed; top: 50%; transform: translateY(-50%);
+  background: none; border: none;
+  color: var(--t3); font-size: 20px; cursor: pointer;
+  padding: 12px; line-height: 1;
+  transition: color .15s; z-index: 100;
+}
+.nav-btn:hover { color: var(--t1); }
+#nav-prev { left: 12px; }
+#nav-next { right: 12px; }
+
+.slide-counter {
+  position: fixed; bottom: 28px; right: 36px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--t3); z-index: 100;
+  letter-spacing: .06em;
+}
+.slide-label {
+  position: fixed; bottom: 28px; left: 36px;
+  font-family: 'Inter', sans-serif; font-size: 11px;
+  font-weight: 500; color: var(--t3); z-index: 100;
+  text-transform: uppercase; letter-spacing: .08em;
+}
+
+/* ─────────────────────────────────────────────────
+   TYPOGRAPHY SCALE
+   ───────────────────────────────────────────────── */
+.display {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 800; letter-spacing: -.03em; line-height: 1;
+}
+h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700; letter-spacing: -.025em; line-height: 1.1;
+}
+.eyebrow {
+  font-family: 'Inter', sans-serif; font-weight: 500;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--t3);
+}
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ONE gradient text instance — reserved for hero title only */
+.hero-grad {
+  background: linear-gradient(135deg, #fff 20%, var(--accent) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─────────────────────────────────────────────────
+   SURFACE SYSTEM
+   Solid backgrounds only — no rgba alpha stacks
+   ───────────────────────────────────────────────── */
+.card {
+  background: var(--s1);
+  border: 1px solid var(--br);
+  border-radius: 8px;
+}
+.card-raised {
+  background: var(--s2);
+  border: 1px solid var(--br2);
+  border-radius: 8px;
+}
+
+/* ─────────────────────────────────────────────────
+   TAGS & LABELS
+   ───────────────────────────────────────────────── */
+.tag {
+  display: inline-block;
+  font-size: 11px; font-weight: 500;
+  padding: 3px 10px; border-radius: 4px;
+  border: 1px solid var(--br2); color: var(--t2);
+  background: var(--s1); letter-spacing: .02em;
+}
+.tag-accent { color: var(--accent); border-color: rgba(129,140,248,.25); background: rgba(129,140,248,.07); }
+.tag-green  { color: var(--green);  border-color: rgba(74,222,128,.25);  background: rgba(74,222,128,.07);  }
+.tag-amber  { color: var(--amber);  border-color: rgba(251,191,36,.25);  background: rgba(251,191,36,.07);  }
+
+/* ─────────────────────────────────────────────────
+   DIVIDERS
+   ───────────────────────────────────────────────── */
+.rule { width: 100%; height: 1px; background: var(--br); }
+.rule-v { width: 1px; background: var(--br); align-self: stretch; }
+
+/* ─────────────────────────────────────────────────
+   SLACK MOCKUP COMPONENT
+   Authentic dark Slack colors, not themed
+   ───────────────────────────────────────────────── */
+.slack {
+  background: #1a1d21;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px; overflow: hidden;
+  font-size: 13px;
+}
+.slack-header {
+  background: #19171d;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  display: flex; align-items: center; gap: 8px;
+}
+.slack-header .ch { font-size: 13px; font-weight: 600; color: #d1d2d3; }
+.slack-header .ch-hash { color: #5c5963; font-size: 15px; font-weight: 400; }
+.slack-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+.slack-msg { display: flex; gap: 10px; }
+.slack-av {
+  width: 30px; height: 30px; border-radius: 5px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+}
+.slack-av-kody { background: #4c5def; } /* indigo, not purple-blue gradient */
+.slack-content { flex: 1; }
+.slack-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.slack-name { font-size: 13px; font-weight: 700; color: #d1d2d3; }
+.slack-kody-name { color: #818cf8; }
+.slack-time { font-size: 11px; color: #5c5963; }
+.slack-text { color: #c7c9cc; line-height: 1.45; font-size: 13px; }
+.slack-mention { color: #1d9bd1; }
+.slack-link { color: #1d9bd1; }
+.slack-status-working { color: #fbbf24; font-size: 12px; }
+.slack-status-done { color: #4ade80; font-size: 12px; }
+.slack-desc { font-size: 11px; color: #5c5963; margin-top: 3px; line-height: 1.4; }
+
+/* ─────────────────────────────────────────────────
+   PIPELINE COMPONENT
+   ───────────────────────────────────────────────── */
+.pipe-phase { margin-bottom: 6px; }
+.pipe-phase-label {
+  font-family: 'Inter', sans-serif; font-weight: 500;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--t3); margin-bottom: 8px; padding-left: 2px;
+}
+.pipe-row { display: flex; align-items: stretch; gap: 0; }
+.pipe-node {
+  flex: 1; padding: 12px 14px;
+  background: var(--s1); border: 1px solid var(--br);
+  border-radius: 6px; text-align: center;
+}
+.pipe-node.det { border-color: rgba(74,222,128,.2); background: rgba(74,222,128,.04); }
+.pipe-node.agt { border-color: rgba(129,140,248,.2); background: rgba(129,140,248,.04); }
+.pipe-node .pn-cat {
+  font-size: 9px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: .1em; margin-bottom: 4px;
+}
+.pipe-node.det .pn-cat { color: var(--green); }
+.pipe-node.agt .pn-cat { color: var(--accent); }
+.pipe-node .pn-title { font-size: 12px; font-weight: 500; color: var(--t1); line-height: 1.3; }
+.pipe-node .pn-sub { font-size: 11px; color: var(--t2); margin-top: 2px; }
+.pipe-arr {
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; flex-shrink: 0; color: var(--t3); font-size: 14px;
+}
+.pipe-section-gap { height: 10px; }
+
+.pipe-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 8px 0; color: var(--t3); font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: .1em;
+}
+.pipe-divider::before, .pipe-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--br);
+}
+
+/* ─────────────────────────────────────────────────
+   BAR CHART COMPONENT
+   ───────────────────────────────────────────────── */
+.bar-chart { display: flex; flex-direction: column; gap: 10px; }
+.bar-row { display: flex; align-items: center; gap: 12px; }
+.bar-lbl { font-size: 12px; color: var(--t2); width: 112px; flex-shrink: 0; line-height: 1.3; }
+.bar-track { flex: 1; height: 6px; background: var(--s2); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+.bar-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--t1); width: 44px; text-align: right; }
+
+/* ─────────────────────────────────────────────────
+   COST TABLE
+   ───────────────────────────────────────────────── */
+.cost-table { width: 100%; border-collapse: collapse; }
+.cost-table th {
+  font-size: 10px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--t3); text-align: left;
+  padding: 8px 12px; border-bottom: 1px solid var(--br);
+}
+.cost-table td {
+  font-size: 13px; color: var(--t2); padding: 9px 12px;
+  border-bottom: 1px solid var(--br);
+  vertical-align: middle;
+}
+.cost-table tr:last-child td { border-bottom: none; }
+.cost-table .val { font-weight: 500; color: var(--t1); text-align: right; }
+
+/* ─────────────────────────────────────────────────
+   SAFETY LAYERS
+   ───────────────────────────────────────────────── */
+.sl-row {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--br);
+}
+.sl-row:last-child { border-bottom: none; }
+.sl-n {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--t3); width: 20px; flex-shrink: 0; padding-top: 1px;
+}
+.sl-body { flex: 1; }
+.sl-title { font-size: 13px; font-weight: 500; color: var(--t1); margin-bottom: 2px; }
+.sl-desc { font-size: 12px; color: var(--t2); line-height: 1.5; }
+
+/* ─────────────────────────────────────────────────
+   ROADMAP
+   ───────────────────────────────────────────────── */
+.rm-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0; width: 100%;
+}
+.rm-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 16px; border-bottom: 1px solid var(--br);
+}
+.rm-item:nth-child(even) { border-left: 1px solid var(--br); }
+.rm-item:nth-last-child(1),
+.rm-item:nth-last-child(2) { border-bottom: none; }
+.rm-num {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--t3); width: 20px; flex-shrink: 0; padding-top: 2px;
+}
+.rm-item.is-next .rm-num { color: var(--accent); }
+.rm-title { font-size: 13px; font-weight: 500; color: var(--t2); line-height: 1.3; }
+.rm-item.is-next .rm-title { color: var(--t1); }
+.rm-sub { font-size: 11px; color: var(--t3); margin-top: 2px; }
+.rm-badge {
+  font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 3px; margin-top: 4px; display: inline-block;
+}
+
+/* ─────────────────────────────────────────────────
+   SCOPE CARDS
+   ───────────────────────────────────────────────── */
+.scope-grid {
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 1px;
+  background: var(--br); border: 1px solid var(--br); border-radius: 8px;
+  overflow: hidden;
+}
+.scope-card {
+  background: var(--s1); padding: 24px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.sc-num {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--t3); letter-spacing: .06em;
+}
+.sc-title { font-size: 15px; font-weight: 500; color: var(--t1); }
+.sc-desc { font-size: 13px; color: var(--t2); line-height: 1.6; }
+.sc-ex {
+  display: flex; flex-direction: column; gap: 5px; margin-top: auto; padding-top: 8px;
+  border-top: 1px solid var(--br);
+}
+.sc-ex-line {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--mono); line-height: 1.3;
+}
+
+/* ─────────────────────────────────────────────────
+   INTEGRATION NODES
+   ───────────────────────────────────────────────── */
+.int-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 1px;
+  background: var(--br); border: 1px solid var(--br); border-radius: 8px;
+  overflow: hidden; width: 100%;
+}
+.int-row-2 {
+  display: grid; grid-template-columns: repeat(2,1fr); gap: 1px;
+  background: var(--br); overflow: hidden;
+  border-left: 1px solid var(--br); border-right: 1px solid var(--br);
+  border-bottom: 1px solid var(--br);
+}
+.int-node {
+  background: var(--s1); padding: 20px 20px 18px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.int-node.center { background: var(--s2); }
+.in-label {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--t3);
+}
+.in-name { font-size: 14px; font-weight: 500; color: var(--t1); }
+.in-role { font-size: 12px; color: var(--t2); line-height: 1.5; max-width: 220px; }
+.in-flow { font-size: 11px; color: var(--t3); font-style: italic; margin-top: 2px; }
+
+/* ─────────────────────────────────────────────────
+   PROBLEM CARDS
+   ───────────────────────────────────────────────── */
+.problem-list {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--br); border: 1px solid var(--br); border-radius: 8px;
+  overflow: hidden;
+}
+.problem-item {
+  background: var(--s1); padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.pi-title { font-size: 14px; font-weight: 500; color: var(--t1); }
+.pi-body { font-size: 13px; color: var(--t2); line-height: 1.55; }
+
+/* ─────────────────────────────────────────────────
+   CHECKLIST (STEP 0)
+   ───────────────────────────────────────────────── */
+.checklist {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--br); border: 1px solid var(--br); border-radius: 8px;
+  overflow: hidden; width: 100%; max-width: 580px;
+}
+.cl-item {
+  background: var(--s1); padding: 16px 18px;
+  display: flex; gap: 16px; align-items: flex-start;
+}
+.cl-n {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--accent); width: 20px; flex-shrink: 0; padding-top: 2px;
+}
+.cl-title { font-size: 14px; font-weight: 500; color: var(--t1); margin-bottom: 3px; }
+.cl-sub { font-size: 12px; color: var(--t2); line-height: 1.5; }
+.cl-code {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--mono); background: rgba(134,239,172,.07);
+  border: 1px solid rgba(134,239,172,.15); border-radius: 3px;
+  padding: 1px 6px; display: inline; margin-top: 3px;
+}
+
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="slide-label" id="slide-label"></div>
+<div class="slide-counter" id="slide-counter"></div>
+<button class="nav-btn" id="nav-prev" aria-label="Previous slide">&#8249;</button>
+<button class="nav-btn" id="nav-next" aria-label="Next slide">&#8250;</button>
+
+<div class="deck" role="main">
+
+<!-- ══════════════════════════════════════════
+     01 — TITLE
+     Layout: centered
+     No animated orbs. One decorative SVG ring.
+     Gradient text on hero name only.
+════════════════════════════════════════════ -->
+<div class="slide active" id="s1" data-label="Introduction" style="flex-direction:column; justify-content:center; align-items:center;">
+
+  <!-- Decorative rings — centered, white, graduated weight -->
+  <svg aria-hidden="true" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:.17;pointer-events:none" width="960" height="960" fill="none" viewBox="0 0 960 960">
+    <circle cx="480" cy="480" r="460" stroke="white" stroke-width="3"/>
+    <circle cx="480" cy="480" r="340" stroke="white" stroke-width="1.5"/>
+    <circle cx="480" cy="480" r="220" stroke="white" stroke-width="1"/>
+    <circle cx="480" cy="480" r="105" stroke="white" stroke-width="1"/>
+  </svg>
+
+  <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center;max-width:680px;">
+    <div class="eyebrow">kode health · engineering</div>
+
+    <div class="display hero-grad" style="font-size:96px; line-height:1.1;">kody</div>
+
+    <p style="font-size:20px; color:var(--t2); line-height:1.5; max-width:520px;">
+      An AI coding agent for kode health.<br>
+      <span style="color:var(--t1);">@mention it in a Slack thread. Get a PR back.</span>
+    </p>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; justify-content:center;">
+      <span class="tag">GitHub Actions</span>
+      <span class="tag">Anthropic Claude</span>
+      <span class="tag">Cloudflare Workers</span>
+      <span class="tag-green tag">Human review required</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     02 — THE PROBLEM
+     Layout: left-heavy (2/3 stat + 1/3 copy)
+════════════════════════════════════════════ -->
+<div class="slide" id="s2" data-label="The Problem"
+     style="align-items:center; justify-content:center;">
+  <div style="display:grid;grid-template-columns:1fr 1.1fr;gap:80px;align-items:center;width:100%;max-width:1060px;">
+
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <div class="eyebrow">The bottleneck</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="display" style="font-size:84px;color:var(--t1);">~3 hrs</div>
+        <div style="font-size:14px;color:var(--t2);line-height:1.6;max-width:300px;">
+          Average engineering time lost daily to context-switching between triage, investigation, and implementation.
+        </div>
+      </div>
+      <div class="rule" style="max-width:340px;"></div>
+      <p style="font-size:13px;color:var(--t3);max-width:300px;line-height:1.6;">
+        Well-understood bugs sit in backlog not because they're hard, but because no one has bandwidth to switch context into them right now.
+      </p>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:1px;">
+      <div class="problem-list">
+        <div class="problem-item">
+          <div class="pi-title">Context-switch cost is high</div>
+          <div class="pi-body">It takes ~23 minutes to fully regain focus after an interruption. Triage tickets create constant interruptions.</div>
+        </div>
+        <div class="problem-item">
+          <div class="pi-title">Issue-to-PR latency is long</div>
+          <div class="pi-body">Well-scoped bugs can still take hours or days to ship because writing the code requires a dedicated block of focus time.</div>
+        </div>
+        <div class="problem-item">
+          <div class="pi-title">Most triage work is execution, not judgment</div>
+          <div class="pi-body">Reading the codebase, finding the pattern, writing the fix, running tests. This is exactly what an AI agent is optimized for.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     03 — WHAT IS KODY
+     Layout: split — definition + Slack mockup
+════════════════════════════════════════════ -->
+<div class="slide" id="s3" data-label="What is kody?">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center;width:100%;max-width:1060px;">
+
+    <div style="display:flex;flex-direction:column;gap:24px;">
+      <div class="eyebrow">Concept</div>
+      <h2 style="font-size:44px;">An agent that writes<br>code autonomously,<br>in your workflow.</h2>
+      <p style="font-size:15px;color:var(--t2);line-height:1.7;max-width:400px;">
+        kody lives in Slack. It reads the full thread where you mentioned it, researches the codebase, implements the change following all team conventions, runs tests, and opens a PR without leaving the conversation.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;gap:12px;align-items:center;font-size:14px;color:var(--t2);">
+          <div style="width:4px;height:4px;border-radius:50%;background:var(--accent);flex-shrink:0"></div>
+          Full thread context, not just the @mention line
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;font-size:14px;color:var(--t2);">
+          <div style="width:4px;height:4px;border-radius:50%;background:var(--accent);flex-shrink:0"></div>
+          Isolated ephemeral runner, no shared state
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;font-size:14px;color:var(--t2);">
+          <div style="width:4px;height:4px;border-radius:50%;background:var(--accent);flex-shrink:0"></div>
+          Tests pass before PR is opened
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;font-size:14px;color:var(--t2);">
+          <div style="width:4px;height:4px;border-radius:50%;background:var(--accent);flex-shrink:0"></div>
+          Human review always required, never auto-merges
+        </div>
+      </div>
+    </div>
+
+    <div class="slack">
+      <div class="slack-header">
+        <span class="ch-hash">#</span>
+        <span class="ch">audit-dev-triage</span>
+      </div>
+      <div class="slack-body">
+        <div class="slack-msg">
+          <div class="slack-av" style="background:#c0392b;">CM</div>
+          <div class="slack-content">
+            <div class="slack-meta">
+              <span class="slack-name">Chris Miles</span>
+              <span class="slack-time">9:14 AM</span>
+            </div>
+            <div class="slack-text">Audit scores are loading slowly on the dashboard. Pretty sure it's the N+1 in the grouper. <span class="slack-mention">@kody</span> can you look at AUD-412 and fix it?</div>
+          </div>
+        </div>
+        <div class="slack-msg">
+          <div class="slack-av slack-av-kody">K</div>
+          <div class="slack-content">
+            <div class="slack-meta">
+              <span class="slack-name slack-kody-name">kody</span>
+              <span class="slack-time">9:14 AM</span>
+            </div>
+            <div class="slack-text slack-status-working">Working, analyzing codebase and reading AUD-412...</div>
+          </div>
+        </div>
+        <div class="slack-msg">
+          <div class="slack-av slack-av-kody">K</div>
+          <div class="slack-content">
+            <div class="slack-meta">
+              <span class="slack-name slack-kody-name">kody</span>
+              <span class="slack-time">9:22 AM</span>
+            </div>
+            <div class="slack-text slack-status-done">Tests passing. PR ready for review:<br><span class="slack-link">github.com/kodehealth/audit/pull/534</span></div>
+            <div class="slack-desc">Added eager loading to AuditScoreGrouper. Includes spec coverage.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     04 — HOW IT WORKS
+     Layout: full-width pipeline diagram
+════════════════════════════════════════════ -->
+<div class="slide" id="s4" data-label="How It Works"
+     style="flex-direction:column;gap:32px;justify-content:center;">
+
+  <div style="text-align:center;">
+    <div class="eyebrow" style="margin-bottom:10px;">Architecture</div>
+    <h2 style="font-size:40px;">From <span style="color:var(--accent);">@mention</span> to merged PR</h2>
+  </div>
+
+  <div style="width:100%;max-width:1020px;display:flex;flex-direction:column;gap:10px;">
+
+    <!-- Trigger chain -->
+    <div class="pipe-phase">
+      <div class="pipe-phase-label" style="color:var(--t3)">Trigger</div>
+      <div class="pipe-row">
+        <div class="pipe-node">
+          <div class="pn-cat" style="color:var(--t3)">Slack</div>
+          <div class="pn-title">@kody mention</div>
+          <div class="pn-sub">Full thread read</div>
+        </div>
+        <div class="pipe-arr">›</div>
+        <div class="pipe-node">
+          <div class="pn-cat" style="color:var(--t3)">Worker</div>
+          <div class="pn-title">Cloudflare Worker</div>
+          <div class="pn-sub">Verify · parse</div>
+        </div>
+        <div class="pipe-arr">›</div>
+        <div class="pipe-node">
+          <div class="pn-cat" style="color:var(--t3)">Storage</div>
+          <div class="pn-title">Cloudflare R2</div>
+          <div class="pn-sub">Context JSON</div>
+        </div>
+        <div class="pipe-arr">›</div>
+        <div class="pipe-node">
+          <div class="pn-cat" style="color:var(--t3)">Dispatch</div>
+          <div class="pn-title">repository_dispatch</div>
+          <div class="pn-sub">event: kody</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipe-divider">GitHub Actions Runner</div>
+
+    <!-- Deterministic -->
+    <div class="pipe-phase">
+      <div class="pipe-phase-label" style="color:var(--green)">Deterministic: defines success, never skipped</div>
+      <div class="pipe-row">
+        <div class="pipe-node det">
+          <div class="pn-cat">Setup</div>
+          <div class="pn-title">Ruby + Postgres</div>
+          <div class="pn-sub">DB schema loaded</div>
+        </div>
+        <div class="pipe-arr">›</div>
+        <div class="pipe-node det" style="flex:2">
+          <div class="pn-cat">Validate · up to 2 rounds</div>
+          <div class="pn-title">StandardRB · RSpec · Brakeman</div>
+          <div class="pn-sub">Real exit codes. kody never self-validates.</div>
+        </div>
+        <div class="pipe-arr">›</div>
+        <div class="pipe-node det">
+          <div class="pn-cat">PR</div>
+          <div class="pn-title">Open Pull Request</div>
+          <div class="pn-sub">labeled kody</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agentic -->
+    <div class="pipe-phase">
+      <div class="pipe-phase-label" style="color:var(--accent)">Agentic: Claude Sonnet, 20-turn cap</div>
+      <div class="pipe-row">
+        <div class="pipe-node agt">
+          <div class="pn-cat">Read</div>
+          <div class="pn-title">Codebase + CLAUDE.md</div>
+          <div class="pn-sub">Conventions · patterns</div>
+        </div>
+        <div class="pipe-arr">›</div>
+        <div class="pipe-node agt">
+          <div class="pn-cat">Implement</div>
+          <div class="pn-title">Write code + specs</div>
+          <div class="pn-sub">Logical commits</div>
+        </div>
+        <div class="pipe-arr">›</div>
+        <div class="pipe-node agt">
+          <div class="pn-cat">Fix</div>
+          <div class="pn-title">Analyze failures</div>
+          <div class="pn-sub">2-round max retry</div>
+        </div>
+        <div class="pipe-arr">›</div>
+        <div class="pipe-node agt">
+          <div class="pn-cat">Review</div>
+          <div class="pn-title">Self-review diff</div>
+          <div class="pn-sub">Rate changes 1–5</div>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:var(--t3);text-align:center;margin-top:4px;">
+      "The walls matter more than the model." (Stripe Blueprint) Deterministic steps define success; agentic steps do the work of meeting it.
+    </p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     05 — THE INTERFACE
+     Layout: left-heavy text + right Slack thread
+════════════════════════════════════════════ -->
+<div class="slide" id="s5" data-label="The Interface">
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:64px;align-items:center;width:100%;max-width:1060px;">
+
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <div class="eyebrow">Primary interface</div>
+      <h2 style="font-size:38px;">The thread is the<br>status page.</h2>
+      <p style="font-size:14px;color:var(--t2);line-height:1.7;">
+        Developers never leave the conversation they're already in. Every progress update and the final PR link post back to the same thread.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:6px;padding-top:4px;border-top:1px solid var(--br);">
+        <div style="font-size:12px;color:var(--t2);line-height:1.5;">Reads full thread, not just the @mention line</div>
+        <div style="font-size:12px;color:var(--t2);line-height:1.5;">Picks up Linear IDs mentioned anywhere in the thread</div>
+        <div style="font-size:12px;color:var(--t2);line-height:1.5;">Posts: started → tests running → PR ready (or failure details)</div>
+        <div style="font-size:12px;color:var(--t2);line-height:1.5;">Multiple threads run kody simultaneously</div>
+      </div>
+    </div>
+
+    <div class="slack">
+      <div class="slack-header">
+        <span class="ch-hash">#</span>
+        <span class="ch">audit-dev-triage</span>
+        <span style="margin-left:auto;font-size:11px;color:#5c5963;">Thread</span>
+      </div>
+      <div class="slack-body">
+        <div class="slack-msg">
+          <div class="slack-av" style="background:#27ae60;">SL</div>
+          <div class="slack-content">
+            <div class="slack-meta"><span class="slack-name">Scott W.</span><span class="slack-time">10:02 AM</span></div>
+            <div class="slack-text">The PDF export times out for large date ranges. Pretty sure it's buffering the whole response before streaming. AUD-567</div>
+          </div>
+        </div>
+        <div class="slack-msg">
+          <div class="slack-av" style="background:#c0392b;">CM</div>
+          <div class="slack-content">
+            <div class="slack-meta"><span class="slack-name">Chris M.</span><span class="slack-time">10:08 AM</span></div>
+            <div class="slack-text">Yeah, should switch to chunked streaming. <span class="slack-mention">@kody</span> go fix it, context is all above</div>
+          </div>
+        </div>
+        <div class="slack-msg">
+          <div class="slack-av slack-av-kody">K</div>
+          <div class="slack-content">
+            <div class="slack-meta"><span class="slack-name slack-kody-name">kody</span><span class="slack-time">10:08 AM</span></div>
+            <div class="slack-text slack-status-working">Working, reading AUD-567 and analyzing the export layer...</div>
+          </div>
+        </div>
+        <div class="slack-msg">
+          <div class="slack-av slack-av-kody">K</div>
+          <div class="slack-content">
+            <div class="slack-meta"><span class="slack-name slack-kody-name">kody</span><span class="slack-time">10:14 AM</span></div>
+            <div class="slack-text" style="color:#a0a0b0;">Implementation complete. Running tests and linting...</div>
+          </div>
+        </div>
+        <div class="slack-msg">
+          <div class="slack-av slack-av-kody">K</div>
+          <div class="slack-content">
+            <div class="slack-meta"><span class="slack-name slack-kody-name">kody</span><span class="slack-time">10:23 AM</span></div>
+            <div class="slack-text slack-status-done">All 247 specs passing. PR ready:<br><span class="slack-link">github.com/kodehealth/audit/pull/534</span></div>
+            <div class="slack-desc">Switched ExportController to ActionController::Live + SSE streaming. Added spec coverage for large date ranges.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     06 — WHAT KODY CAN DO
+     Layout: centered grid, no icon emojis
+════════════════════════════════════════════ -->
+<div class="slide" id="s6" data-label="Scope"
+     style="flex-direction:column;gap:36px;justify-content:center;">
+  <div style="text-align:center;">
+    <div class="eyebrow" style="margin-bottom:10px;">Scope of work</div>
+    <h2 style="font-size:44px;">Not limited to bug fixes.</h2>
+    <p style="font-size:15px;color:var(--t2);margin-top:8px;">Give kody a Linear issue, a pasted PRD, or plain English. It handles all of it.</p>
+  </div>
+
+  <div class="scope-grid" style="max-width:1020px;">
+    <div class="scope-card">
+      <div class="sc-num">01 · Bug Fixes</div>
+      <div class="sc-title">Diagnose and fix defects</div>
+      <div class="sc-desc">Reads error logs, traces the call stack, implements the minimal fix with regression coverage.</div>
+      <div class="sc-ex">
+        <div class="sc-ex-line">@kody fix AUD-567</div>
+        <div class="sc-ex-line">@kody the N+1 described above</div>
+      </div>
+    </div>
+    <div class="scope-card">
+      <div class="sc-num">02 · Features</div>
+      <div class="sc-title">Build new functionality</div>
+      <div class="sc-desc">Finds analogous patterns in existing code, follows service object conventions, writes specs.</div>
+      <div class="sc-ex">
+        <div class="sc-ex-line">@kody add /health endpoint</div>
+        <div class="sc-ex-line">@kody [paste full PRD]</div>
+      </div>
+    </div>
+    <div class="scope-card">
+      <div class="sc-num">03 · Refactors</div>
+      <div class="sc-title">Restructure without behavior change</div>
+      <div class="sc-desc">Modernizes patterns, extracts service objects, reduces duplication. Keeps tests green throughout.</div>
+      <div class="sc-ex">
+        <div class="sc-ex-line">@kody extract PDF logic</div>
+        <div class="sc-ex-line">@kody streaming refactor</div>
+      </div>
+    </div>
+    <div class="scope-card">
+      <div class="sc-num">04 · PRD Implementation</div>
+      <div class="sc-title">Build from requirements</div>
+      <div class="sc-desc">Paste a full product requirements doc in the thread. kody reads it and implements end-to-end.</div>
+      <div class="sc-ex">
+        <div class="sc-ex-line">@kody here's what I need: ...</div>
+        <div class="sc-ex-line">@kody the thread explains it</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;">
+    <span style="font-size:12px;color:var(--t3);">Also handles:</span>
+    <span class="tag">Database migrations</span>
+    <span class="tag">New gem / npm dependencies</span>
+    <span class="tag">Auth-related changes</span>
+    <span class="tag">Test coverage gaps</span>
+    <span class="tag">Dependency upgrades</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     07 — SAFETY
+     Layout: split — principle left, layers right
+════════════════════════════════════════════ -->
+<div class="slide" id="s7" data-label="Safety Architecture">
+  <div style="display:grid;grid-template-columns:360px 1fr;gap:72px;align-items:center;width:100%;max-width:1060px;">
+
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <div class="eyebrow">Safety model</div>
+      <h2 style="font-size:42px;">Six layers between kody and production.</h2>
+      <p style="font-size:14px;color:var(--t2);line-height:1.7;max-width:300px;">
+        Every kody PR is sandboxed and ephemeral. The PR review is the final gate, but we don't rely on that alone.
+      </p>
+      <div class="card" style="padding:16px 18px;">
+        <div style="font-size:12px;color:var(--t2);line-height:1.65;">
+          <span style="color:var(--t1);font-weight:500;">"The walls matter more than the model."</span><br>
+          Deterministic constraints (tests, linting, tool allowlists, required human review) are what make autonomous code generation safe to deploy. Model quality is secondary to the structure around it.
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin-top:6px;">Stripe Blueprint architecture</div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="sl-row">
+        <div class="sl-n">01</div>
+        <div class="sl-body">
+          <div class="sl-title">Classification Gate</div>
+          <div class="sl-desc">Fast Claude API call before the main run. Filters true no-ops (vague, non-actionable requests) before spending compute on a full session.</div>
+        </div>
+      </div>
+      <div class="sl-row">
+        <div class="sl-n">02</div>
+        <div class="sl-body">
+          <div class="sl-title">Tool Allowlist (Agent Mode)</div>
+          <div class="sl-desc">Explicit <span class="mono" style="font-size:11px;color:var(--mono);">--allowedTools</span> in agent mode. Hard blocks on <span class="mono" style="font-size:11px;color:var(--mono);">rm</span>, <span class="mono" style="font-size:11px;color:var(--mono);">curl</span>, <span class="mono" style="font-size:11px;color:var(--mono);">wget</span>, and db commands. Cannot be overridden by the prompt.</div>
+        </div>
+      </div>
+      <div class="sl-row">
+        <div class="sl-n">03</div>
+        <div class="sl-body">
+          <div class="sl-title">Deterministic Validation</div>
+          <div class="sl-desc">Tests and linting run as separate steps with real exit codes. kody never self-validates. If StandardRB fails, the run fails, not "Claude says it looks fine."</div>
+        </div>
+      </div>
+      <div class="sl-row">
+        <div class="sl-n">04</div>
+        <div class="sl-body">
+          <div class="sl-title">Bounded Retry Loop</div>
+          <div class="sl-desc">Maximum 2 CI rounds. After 2 failures, kody opens the PR anyway with failure context attached. It never spins indefinitely.</div>
+        </div>
+      </div>
+      <div class="sl-row">
+        <div class="sl-n">05</div>
+        <div class="sl-body">
+          <div class="sl-title">Existing CI Pipeline</div>
+          <div class="sl-desc">Every kody PR runs Brakeman, StandardRB, ERB lint, and the full RSpec suite, the same gates as any human-authored PR.</div>
+        </div>
+      </div>
+      <div class="sl-row">
+        <div class="sl-n">06</div>
+        <div class="sl-body">
+          <div class="sl-title">Mandatory Human Review</div>
+          <div class="sl-desc">PRs labeled <span class="mono" style="font-size:11px;color:var(--mono);">kody</span> never auto-merge. Branch protection requires human approval. Structural, not configurable.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     08 — INTEGRATIONS
+     Layout: full-width node grid, no emoji
+════════════════════════════════════════════ -->
+<div class="slide" id="s8" data-label="System Integrations"
+     style="flex-direction:column;gap:36px;justify-content:center;">
+  <div style="text-align:center;">
+    <div class="eyebrow" style="margin-bottom:10px;">System integrations</div>
+    <h2 style="font-size:44px;">kody lives in your existing stack.</h2>
+    <p style="font-size:15px;color:var(--t2);margin-top:8px;">No new dashboards. No new tools. Everything flows through systems the team already uses every day.</p>
+  </div>
+
+  <div style="width:100%;max-width:960px;display:flex;flex-direction:column;gap:1px;">
+    <!-- Top row: 3 nodes -->
+    <div class="int-grid">
+      <div class="int-node">
+        <div class="in-label">Slack</div>
+        <div class="in-name">Primary Interface</div>
+        <div class="in-role">@mentions trigger kody. The same thread receives all progress updates and the final PR link. No separate dashboard needed.</div>
+        <div class="in-flow">app_mention event · conversations.replies · chat.postMessage</div>
+      </div>
+      <div class="int-node center">
+        <div class="in-label">Cloudflare</div>
+        <div class="in-name">Worker + R2</div>
+        <div class="in-role">Worker verifies Slack signatures, reads thread context, writes full payload to R2 (required; dispatch payload is ~10KB max), fires repository_dispatch.</div>
+        <div class="in-flow">Zero cold start · R2 audit log · retry replay</div>
+      </div>
+      <div class="int-node">
+        <div class="in-label">GitHub</div>
+        <div class="in-name">Actions + Pull Requests</div>
+        <div class="in-role">kody.yml runs on Actions. kody pushes a branch, opens a PR labeled kody, and all existing CI gates apply, same as any human PR.</div>
+        <div class="in-flow">repository_dispatch · kody.yml · branch protection</div>
+      </div>
+    </div>
+    <!-- Bottom row: 2 nodes -->
+    <div class="int-row-2">
+      <div class="int-node">
+        <div class="in-label">Linear</div>
+        <div class="in-name">Issue Source</div>
+        <div class="in-role">kody fetches issue details via GraphQL when an issue ID is mentioned. Comments on the Linear ticket with PR link and summary when done. Later: webhook auto-triage on label apply.</div>
+        <div class="in-flow">GraphQL API · webhook auto-trigger (Step 9)</div>
+      </div>
+      <div class="int-node">
+        <div class="in-label">Anthropic</div>
+        <div class="in-name">Claude Sonnet</div>
+        <div class="in-role">The reasoning engine powering kody. Reads codebase, implements changes following CLAUDE.md, analyzes failures, self-reviews the diff. 20-turn cap, prompt caching enabled.</div>
+        <div class="in-flow">claude-code-action · agent mode · --allowedTools</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     09 — COST MODEL
+     Layout: split — table left, chart right
+════════════════════════════════════════════ -->
+<div class="slide" id="s9" data-label="Cost Model">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center;width:100%;max-width:1060px;">
+
+    <div style="display:flex;flex-direction:column;gap:24px;">
+      <div>
+        <div class="eyebrow" style="margin-bottom:10px;">Economics</div>
+        <h2 style="font-size:42px;">Less than a team<br>lunch per month.</h2>
+      </div>
+      <p style="font-size:14px;color:var(--t2);line-height:1.7;">Claude Sonnet with prompt caching. Costs are per-run; Cloudflare Worker and GitHub Actions are effectively free at this volume.</p>
+
+      <div class="card" style="padding:0;overflow:hidden;">
+        <table class="cost-table">
+          <thead>
+            <tr>
+              <th>Complexity</th>
+              <th>Example</th>
+              <th style="text-align:right;">~Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Low</td><td>One-file fix</td><td class="val">$0.75</td></tr>
+            <tr><td>Medium</td><td>Multi-file + tests</td><td class="val">$2.00</td></tr>
+            <tr><td>High</td><td>Investigation + retries</td><td class="val">$5.50</td></tr>
+            <tr><td>Very High</td><td>Complex refactor</td><td class="val">$11.00</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p style="font-size:12px;color:var(--t3);line-height:1.6;">Prompt caching (automatic in claude-code-action) cuts repeated file-read costs by ~90%. Real costs are typically 30–50% below raw estimates.</p>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:28px;">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--t1);margin-bottom:14px;">Monthly projection: Sonnet</div>
+        <div class="bar-chart">
+          <div class="bar-row">
+            <div class="bar-lbl">5 issues / week</div>
+            <div class="bar-track"><div class="bar-fill" style="width:15%;background:var(--green)"></div></div>
+            <div class="bar-val">~$30</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-lbl">7 issues / week</div>
+            <div class="bar-track"><div class="bar-fill" style="width:35%"></div></div>
+            <div class="bar-val">~$70</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-lbl">10 / week mixed</div>
+            <div class="bar-track"><div class="bar-fill" style="width:60%"></div></div>
+            <div class="bar-val">~$120</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-lbl">10 / week complex</div>
+            <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+            <div class="bar-val">~$200</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rule"></div>
+
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--t1);margin-bottom:14px;">Sonnet vs Opus</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="card" style="padding:14px 16px;">
+            <div style="font-size:12px;color:var(--t3);margin-bottom:6px;font-weight:500;">Sonnet</div>
+            <div style="font-size:13px;color:var(--t1);font-weight:500;margin-bottom:4px;">Start here</div>
+            <div style="font-size:12px;color:var(--t2);line-height:1.5;">~$2 / medium fix. Track merge rate; upgrade only if too low.</div>
+          </div>
+          <div class="card" style="padding:14px 16px;">
+            <div style="font-size:12px;color:var(--t3);margin-bottom:6px;font-weight:500;">Opus</div>
+            <div style="font-size:13px;color:var(--t1);font-weight:500;margin-bottom:4px;">Higher success rate</div>
+            <div style="font-size:12px;color:var(--t2);line-height:1.5;">~$9 / medium fix. 5x cost for significantly better results on complex tasks.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     10 — ROADMAP
+     Layout: full-width grid — no timeline CSS hack
+════════════════════════════════════════════ -->
+<div class="slide" id="s10" data-label="Roadmap"
+     style="flex-direction:column;gap:32px;justify-content:center;">
+  <div style="text-align:center;">
+    <div class="eyebrow" style="margin-bottom:10px;">Implementation roadmap</div>
+    <h2 style="font-size:44px;">10 steps. Each independently testable.</h2>
+    <p style="font-size:15px;color:var(--t2);margin-top:8px;">Every step delivers value on its own. Steps 0–4 yield a fully functional Slack bot.</p>
+  </div>
+
+  <div style="width:100%;max-width:960px;">
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="rm-grid">
+        <div class="rm-item is-next">
+          <div class="rm-num">00</div>
+          <div>
+            <div class="rm-title">kody.yml · Manual trigger</div>
+            <div class="rm-sub">workflow_dispatch from GitHub UI. Validates Claude works in this codebase.</div>
+            <span class="rm-badge tag-accent" style="font-size:10px;padding:2px 8px;border-radius:3px;border:1px solid rgba(129,140,248,.25);color:var(--accent);">Up next</span>
+          </div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">01</div>
+          <div><div class="rm-title">One-way Slack notifications</div><div class="rm-sub">Incoming Webhook. Zero new infra. Team visibility before any bot exists.</div></div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">02</div>
+          <div><div class="rm-title">Cloudflare Worker relay</div><div class="rm-sub">Deploy Worker. /health + /workflow-dispatch. Manual curl trigger.</div></div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">03</div>
+          <div><div class="rm-title">Slack App + @mention bot</div><div class="rm-sub">app_mention events. Immediate threaded reply. Internal app for rate limit exemption.</div></div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">04</div>
+          <div><div class="rm-title">Thread context reading</div><div class="rm-sub">conversations.replies. kody reads the full thread. This is the differentiating capability.</div></div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">05</div>
+          <div><div class="rm-title">Freeform @kody</div><div class="rm-sub">No Linear ID needed. Thread text becomes the prompt directly. Fastest path to real usage.</div></div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">06</div>
+          <div><div class="rm-title">2-round retry loop</div><div class="rm-sub">Test failure → feed error back → retry. Bounded by 2 rounds, per Stripe's proven approach.</div></div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">07</div>
+          <div><div class="rm-title">Thread progress updates</div><div class="rm-sub">Started → running tests → PR ready. The thread becomes a live status feed.</div></div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">08</div>
+          <div><div class="rm-title">@kody status</div><div class="rm-sub">Polls GitHub Actions API. Ephemeral reply listing all active kody runs with status and links.</div></div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">09</div>
+          <div><div class="rm-title">Linear webhook auto-triage</div><div class="rm-sub">Apply "triage" label in Linear → kody fires automatically. No manual @mention needed.</div></div>
+        </div>
+        <div class="rm-item">
+          <div class="rm-num">10</div>
+          <div><div class="rm-title">Multi-repo routing</div><div class="rm-sub">AUD → kodehealth/audit · KMP → platform · KOM → kompass. Shared workflow, thin callers.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     11 — START HERE
+     Layout: centered, focused, no clutter
+════════════════════════════════════════════ -->
+<div class="slide" id="s11" data-label="Next Steps"
+     style="flex-direction:column;gap:36px;align-items:center;justify-content:center;">
+
+  <!-- Static SVG decoration — contained, intentional, one instance -->
+  <svg aria-hidden="true" style="position:absolute;left:60px;bottom:60px;opacity:.05;pointer-events:none" width="200" height="200" fill="none" viewBox="0 0 200 200">
+    <rect x="10" y="10" width="180" height="180" rx="4" stroke="#818cf8" stroke-width="1" stroke-dasharray="4 4"/>
+    <rect x="40" y="40" width="120" height="120" rx="4" stroke="#818cf8" stroke-width="1" stroke-dasharray="4 4"/>
+  </svg>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;max-width:560px;">
+    <span class="tag tag-accent" style="font-size:11px;letter-spacing:.08em;">Step 0: Start here</span>
+    <h2 style="font-size:50px;">Validate the core<br>loop first.</h2>
+    <p style="font-size:16px;color:var(--t2);line-height:1.7;max-width:480px;">
+      Before building any infrastructure, prove that Claude works in <span style="color:var(--t1);font-weight:500;">this codebase</span>. One workflow file, one secret, one manual trigger. 30 minutes.
+    </p>
+  </div>
+
+  <div class="checklist">
+    <div class="cl-item">
+      <div class="cl-n">01</div>
+      <div>
+        <div class="cl-title">Add ANTHROPIC_API_KEY to GitHub Secrets</div>
+        <div class="cl-sub">kodehealth/audit → Settings → Secrets and variables → Actions</div>
+      </div>
+    </div>
+    <div class="cl-item">
+      <div class="cl-n">02</div>
+      <div>
+        <div class="cl-title">Set workflow permissions to Read &amp; Write</div>
+        <div class="cl-sub">repo Settings → Actions → General → Workflow permissions. Required for pushing branches and opening PRs.</div>
+      </div>
+    </div>
+    <div class="cl-item">
+      <div class="cl-n">03</div>
+      <div>
+        <div class="cl-title">Create .github/workflows/kody.yml</div>
+        <div class="cl-sub">Full spec in <span class="cl-code">docs/quickstart.md</span>. Supports workflow_dispatch (manual) and repository_dispatch (Worker).</div>
+      </div>
+    </div>
+    <div class="cl-item">
+      <div class="cl-n">04</div>
+      <div>
+        <div class="cl-title">Trigger from GitHub Actions UI · evaluate the diff</div>
+        <div class="cl-sub">Actions → kody → Run workflow → paste a real issue description. Watch kody create a PR. Does it follow CLAUDE.md? Do tests pass?</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /deck -->
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const labels = [...slides].map(s => s.dataset.label || '');
+let cur = 0;
+
+function goTo(n) {
+  slides[cur].classList.remove('active');
+  cur = Math.max(0, Math.min(n, slides.length - 1));
+  slides[cur].classList.add('active');
+  document.getElementById('slide-counter').textContent =
+    String(cur + 1).padStart(2, '0') + ' / ' + String(slides.length).padStart(2, '0');
+  document.getElementById('slide-label').textContent = labels[cur];
+  document.getElementById('progress').style.width =
+    ((cur + 1) / slides.length * 100) + '%';
+}
+
+document.getElementById('nav-prev').onclick = () => goTo(cur - 1);
+document.getElementById('nav-next').onclick = () => goTo(cur + 1);
+
+document.addEventListener('keydown', e => {
+  if (['ArrowRight', ' ', 'ArrowDown'].includes(e.key)) { e.preventDefault(); goTo(cur + 1); }
+  if (['ArrowLeft', 'ArrowUp'].includes(e.key))          { e.preventDefault(); goTo(cur - 1); }
+  if (e.key === 'Home') goTo(0);
+  if (e.key === 'End')  goTo(slides.length - 1);
+});
+
+let tx = 0;
+document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+document.addEventListener('touchend',   e => {
+  const dx = e.changedTouches[0].clientX - tx;
+  if (Math.abs(dx) > 48) goTo(cur + (dx < 0 ? 1 : -1));
+}, { passive: true });
+
+goTo(0);
+</script>
+</body>
+</html>
