@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Visual Explainers</title>
+<title>Field Notes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -46,6 +46,7 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
   }
 
   /* Skip link for keyboard users */
@@ -67,13 +68,14 @@
      masthead visible while the right index scrolls. */
   .page {
     display: grid;
-    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
     gap: clamp(40px, 6vw, 120px);
     padding: clamp(48px, 9vh, 120px) clamp(32px, 7vw, 112px);
     max-width: 1560px;
     margin: 0 auto;
     min-height: 100dvh;
   }
+  .page > * { min-width: 0; }
 
   aside.meta {
     position: sticky;
@@ -130,12 +132,13 @@
 
   h1 {
     font-family: 'DM Sans', sans-serif;
-    font-size: clamp(52px, 8vw, 112px);
+    font-size: clamp(44px, 5.5vw, 96px);
     font-weight: 500;
     letter-spacing: -0.055em;
     line-height: 0.95;
     color: var(--text);
     text-wrap: balance;
+    overflow-wrap: anywhere;
   }
 
   .subtitle {
@@ -257,7 +260,7 @@
     color: var(--text-muted);
   }
 
-  @media (max-width: 880px) {
+  @media (max-width: 1024px) {
     .page {
       grid-template-columns: 1fr;
       gap: clamp(32px, 6vh, 56px);
@@ -268,8 +271,11 @@
       max-height: none;
       overflow-y: visible;
     }
-    h1 { font-size: clamp(36px, 9vw, 56px); letter-spacing: -0.045em; }
-    a.deck .title { font-size: clamp(18px, 4vw, 22px); }
+    h1 { font-size: clamp(40px, 9vw, 72px); letter-spacing: -0.045em; }
+    a.deck .title { font-size: clamp(18px, 4vw, 24px); }
+  }
+  @media (max-width: 480px) {
+    h1 { font-size: clamp(36px, 10vw, 48px); }
   }
 </style>
 </head>
@@ -285,8 +291,8 @@
       <span>Index</span>
       <span class="count" id="running-count" aria-live="polite">&mdash;</span>
     </div>
-    <h1>Visual Explainers</h1>
-    <p class="subtitle">A shelf for HTML slide decks and diagrams, built to drop into a pull request or design doc. Each entry is a standalone page.</p>
+    <h1>Field Notes</h1>
+    <p class="subtitle">HTML slide decks, diagrams, and visual explainers meant to drop into a pull request or design doc. Each entry is a standalone page.</p>
   </aside>
 
   <main aria-labelledby="index-heading">
@@ -314,12 +320,16 @@
 
   const humanize = (filename) => {
     const base = filename.replace(/\.html$/i, '')
-    return base
-      .split(/[-_]+/)
-      .filter(Boolean)
-      .map((word) => {
+    const parts = base.split(/[-_]+/).filter(Boolean)
+    return parts
+      .map((word, i) => {
         if (/^[A-Z0-9]{2,}$/.test(word)) return word
-        if (/^[a-z]{2,4}\d+$/i.test(word)) return word.toUpperCase()
+        if (/^\d+$/.test(word)) return word
+        // Ticket prefix: 2-4 letter word followed by a pure-digit word
+        const next = parts[i + 1]
+        if (/^[a-z]{2,4}$/i.test(word) && next && /^\d+$/.test(next)) {
+          return word.toUpperCase()
+        }
         return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
       })
       .join(' ')
@@ -377,7 +387,7 @@
     .then((files) => {
       const decks = files
         .filter((f) => f.type === 'file' && /\.html$/i.test(f.name) && f.name.toLowerCase() !== 'index.html')
-        .sort((a, b) => a.name.localeCompare(b.name))
+        .sort((a, b) => b.name.localeCompare(a.name))
         .map((f) => ({name: f.name}))
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(decks)) } catch (_) {}
       renderDecks(decks)
