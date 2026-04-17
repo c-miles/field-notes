@@ -118,22 +118,13 @@
     outline: none;
   }
 
-  /* Running head gives the accent a load-bearing job: the live deck count. */
-  .running-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding-top: 10px;
+  /* Silent horizontal rule that visually anchors against the list-head's
+     border-bottom on the right column. Same Y, same weight. No label. */
+  hr.divider {
+    height: 0;
+    margin: 0;
+    border: none;
     border-top: 1px solid var(--rule-bright);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-    letter-spacing: 1.4px;
-    text-transform: uppercase;
-    color: var(--text);
-  }
-  .running-head .count {
-    color: var(--accent);
-    font-variant-numeric: tabular-nums;
   }
 
   h1 {
@@ -293,10 +284,7 @@
 
   <aside class="meta">
     <a class="breadcrumb" href="https://github.com/c-miles/field-notes" target="_blank" rel="noopener">c-miles / field-notes</a>
-    <div class="running-head">
-      <span>Index</span>
-      <span class="count" id="running-count" aria-live="polite">&mdash;</span>
-    </div>
+    <hr class="divider" aria-hidden="true">
     <h1>Field Notes</h1>
     <p class="subtitle">HTML slide decks, diagrams, and visual explainers meant to drop into a pull request or design doc. Each entry is a standalone page.</p>
   </aside>
@@ -304,7 +292,7 @@
   <main aria-labelledby="index-heading">
     <div class="list-head">
       <span id="index-heading">Index</span>
-      <span id="list-head-right">&mdash;</span>
+      <span id="list-head-right" aria-live="polite">&mdash;</span>
     </div>
     <ul id="deck-list" aria-labelledby="index-heading">
       <li class="state">Loading index</li>
@@ -319,7 +307,6 @@
   // except this index itself. Adding a new deck is a matter of pushing the
   // file; no edits to index.html needed.
   const list = document.getElementById('deck-list')
-  const runningCount = document.getElementById('running-count')
   const headRight = document.getElementById('list-head-right')
   const listFoot = document.getElementById('list-foot')
   const CACHE_KEY = 've-decks-cache-v1'
@@ -344,7 +331,6 @@
   const pad = (n) => String(n).padStart(2, '0')
 
   const renderDecks = (decks) => {
-    runningCount.textContent = pad(decks.length)
     headRight.textContent = decks.length + (decks.length === 1 ? ' entry' : ' entries')
 
     list.innerHTML = ''
@@ -377,7 +363,6 @@
   }
 
   const showError = (message) => {
-    runningCount.textContent = '--'
     headRight.textContent = 'error'
     list.innerHTML =
       '<li class="state">Could not reach the GitHub API (' + message + '). ' +
