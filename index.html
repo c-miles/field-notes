@@ -248,22 +248,6 @@
     outline: none;
   }
 
-  /* Editorial end-mark. A tiny accent-colored diamond terminates the
-     list the way a print article uses ◼ or ▪ — no label, just a mark. */
-  .list-foot {
-    padding-top: clamp(32px, 6vh, 56px);
-    display: flex;
-    justify-content: center;
-  }
-  .list-foot::before {
-    content: '';
-    display: block;
-    width: 6px;
-    height: 6px;
-    background: var(--accent);
-    transform: rotate(45deg);
-  }
-
   @media (max-width: 1024px) {
     .page {
       grid-template-columns: 1fr;
@@ -304,7 +288,6 @@
     <ul id="deck-list" aria-labelledby="index-heading">
       <li class="state">Loading index</li>
     </ul>
-    <div class="list-foot" id="list-foot" hidden aria-hidden="true"></div>
   </main>
 
 </div>
@@ -315,7 +298,6 @@
   // file; no edits to index.html needed.
   const list = document.getElementById('deck-list')
   const headRight = document.getElementById('list-head-right')
-  const listFoot = document.getElementById('list-foot')
   const CACHE_KEY = 've-decks-cache-v1'
 
   const humanize = (filename) => {
@@ -343,7 +325,6 @@
     list.innerHTML = ''
     if (decks.length === 0) {
       list.innerHTML = '<li class="state">No decks yet. Push an HTML file to this repo and it will appear here.</li>'
-      listFoot.hidden = true
       return
     }
 
@@ -366,7 +347,6 @@
       li.appendChild(a)
       list.appendChild(li)
     })
-    listFoot.hidden = false
   }
 
   const showError = (message) => {
@@ -374,7 +354,6 @@
     list.innerHTML =
       '<li class="state">Could not reach the GitHub API (' + message + '). ' +
       '<button type="button" class="retry" onclick="location.reload()">Retry</button></li>'
-    listFoot.hidden = true
   }
 
   fetch('https://api.github.com/repos/c-miles/field-notes/contents/')
