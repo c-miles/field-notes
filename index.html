@@ -286,7 +286,7 @@
 <div class="page">
 
   <aside class="meta">
-    <a class="breadcrumb" href="https://github.com/c-miles/visual-explainers" target="_blank" rel="noopener">c-miles / visual-explainers</a>
+    <a class="breadcrumb" href="https://github.com/c-miles/field-notes" target="_blank" rel="noopener">c-miles / field-notes</a>
     <div class="running-head">
       <span>Index</span>
       <span class="count" id="running-count" aria-live="polite">&mdash;</span>
@@ -379,7 +379,7 @@
     listFoot.hidden = true
   }
 
-  fetch('https://api.github.com/repos/c-miles/visual-explainers/contents/')
+  fetch('https://api.github.com/repos/c-miles/field-notes/contents/')
     .then((r) => {
       if (!r.ok) throw new Error(r.status + ' ' + r.statusText)
       return r.json()
