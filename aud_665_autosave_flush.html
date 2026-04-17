@@ -86,33 +86,19 @@
     padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px);
     isolation: isolate;
     opacity: 0;
-    transform: translateY(40px) scale(0.98);
-    transition:
-      opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-      transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.3s ease;
   }
 
-  .slide.visible { opacity: 1; transform: none; }
+  .slide.visible { opacity: 1; }
 
-  .slide .reveal {
-    opacity: 0;
-    transform: translateY(20px);
-    transition:
-      opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-      transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  .slide.visible .reveal { opacity: 1; transform: none; }
-  .slide.visible .reveal:nth-child(1) { transition-delay: 0.08s; }
-  .slide.visible .reveal:nth-child(2) { transition-delay: 0.18s; }
-  .slide.visible .reveal:nth-child(3) { transition-delay: 0.28s; }
-  .slide.visible .reveal:nth-child(4) { transition-delay: 0.38s; }
-  .slide.visible .reveal:nth-child(5) { transition-delay: 0.48s; }
-  .slide.visible .reveal:nth-child(6) { transition-delay: 0.58s; }
+  /* No positional transform on child reveals. Only the slide itself fades
+     in so arrow-key navigation never appears to "shift down" — the content
+     is always in its final position, it just gains opacity. */
+  .slide .reveal { opacity: 1; }
 
   @media (prefers-reduced-motion: reduce) {
-    .slide, .slide .reveal {
+    .slide {
       opacity: 1 !important;
-      transform: none !important;
       transition: none !important;
     }
   }
@@ -759,9 +745,9 @@
         <h2 class="slide__heading reveal">One fast auditor,<br/>one slow network</h2>
         <ul class="slide__bullets" style="margin-top:clamp(16px,3vh,24px);">
           <li class="reveal">Auditor types in the <strong>Auditor Notes</strong> textarea. Autosave is armed with a <strong>1&nbsp;s debounce</strong> on <code>input</code> and <code>blur</code>.</li>
-          <li class="reveal">They finish typing, pause for less than a second, then click <strong>Submit</strong>. The debounced save is still queued when the completion form fires.</li>
+          <li class="reveal">They finish typing, pause for less than a second, then click <strong>Submit</strong>. On a slow-enough connection, the debounced save is still queued when the completion form fires.</li>
           <li class="reveal">The completion form is a plain <code>form_with</code>, so its redirect triggers a full Turbo Visit.</li>
-          <li class="reveal">From here, timing decides whether Bugsnag screams, or the edits quietly disappear.</li>
+          <li class="reveal">Locally this is hard to trigger without throttling. In production the completion POST is slow enough for the race to open on its own, and Bugsnag caught it more than once.</li>
         </ul>
       </div>
       <div class="slide__aside reveal">
