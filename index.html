@@ -104,6 +104,10 @@
     border-bottom: 1px solid transparent;
     align-self: flex-start;
     transition: color 0.15s ease, border-color 0.15s ease;
+    /* Pulls the running-head 10px closer so the gap between breadcrumb
+       and its line matches the 18px gap between the list-head label
+       and its line on the right column. */
+    margin-bottom: -10px;
   }
   a.breadcrumb:hover,
   a.breadcrumb:focus-visible {
