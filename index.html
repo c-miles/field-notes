@@ -104,10 +104,12 @@
     border-bottom: 1px solid transparent;
     align-self: flex-start;
     transition: color 0.15s ease, border-color 0.15s ease;
-    /* Pulls the running-head 10px closer so the gap between breadcrumb
-       and its line matches the 18px gap between the list-head label
-       and its line on the right column. */
-    margin-bottom: -10px;
+    /* Pulls the running-head up so its border-top lands on the exact same
+       Y as the list-head's border-bottom on the right column. The value
+       accounts for the breadcrumb's 2px of invisible padding+transparent-
+       border (reserved so the hover underline appears without shifting
+       layout) plus the 10px needed to match the 18px right-column gap. */
+    margin-bottom: -12px;
   }
   a.breadcrumb:hover,
   a.breadcrumb:focus-visible {
