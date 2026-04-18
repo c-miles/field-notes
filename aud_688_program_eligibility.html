@@ -982,7 +982,7 @@ flowchart LR
     + Resume`"]
   end
 
-  subgraph Batch ["Nightly &middot; 00:15 UTC"]
+  subgraph Batch ["Nightly &middot; 00:15 ET"]
     direction LR
     Cron["`Sidekiq cron`"] --> Job["`InactivityPauseJob`"]
     Job --> Scope["`idle_since
@@ -1237,13 +1237,13 @@ flowchart LR
       </div>
       <div class="slide__kpi reveal">
         <div class="slide__kpi-val" style="color:var(--blue);">00:15</div>
-        <div class="slide__kpi-label">UTC Cron</div>
+        <div class="slide__kpi-label">Eastern Cron</div>
         <div class="slide__kpi-trend">15 0 * * *</div>
       </div>
       <div class="slide__kpi reveal">
         <div class="slide__kpi-val" style="color:var(--violet);">+14m</div>
         <div class="slide__kpi-label">After Trigger Batch</div>
-        <div class="slide__kpi-trend">00:01 UTC</div>
+        <div class="slide__kpi-trend">00:01 ET</div>
       </div>
     </div>
     <p class="slide__body reveal" style="margin-top:clamp(16px,2.5vh,28px); max-width:920px;">
