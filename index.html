@@ -356,16 +356,32 @@
       '<button type="button" class="retry" onclick="location.reload()">Retry</button></li>'
   }
 
+  // Fetch the file list, then one last-commit lookup per file so the index
+  // sorts by recency (newest deck on top). Falls back to alphabetical if
+  // commit lookups fail (e.g. API rate limit).
   fetch('https://api.github.com/repos/c-miles/field-notes/contents/')
     .then((r) => {
       if (!r.ok) throw new Error(r.status + ' ' + r.statusText)
       return r.json()
     })
     .then((files) => {
-      const decks = files
-        .filter((f) => f.type === 'file' && /\.html$/i.test(f.name) && f.name.toLowerCase() !== 'index.html')
-        .sort((a, b) => b.name.localeCompare(a.name))
-        .map((f) => ({name: f.name}))
+      const candidates = files.filter((f) =>
+        f.type === 'file' && /\.html$/i.test(f.name) && f.name.toLowerCase() !== 'index.html'
+      )
+      return Promise.all(candidates.map((f) =>
+        fetch('https://api.github.com/repos/c-miles/field-notes/commits?path=' + encodeURIComponent(f.name) + '&per_page=1')
+          .then((r) => r.ok ? r.json() : [])
+          .then((commits) => ({ name: f.name, date: commits[0] && commits[0].commit && commits[0].commit.committer && commits[0].commit.committer.date }))
+          .catch(() => ({ name: f.name, date: null }))
+      ))
+    })
+    .then((decks) => {
+      decks.sort((a, b) => {
+        if (a.date && b.date) return b.date.localeCompare(a.date)
+        if (a.date) return -1
+        if (b.date) return 1
+        return b.name.localeCompare(a.name)
+      })
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(decks)) } catch (_) {}
       renderDecks(decks)
     })
