@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>AUD-694 - Filter Persistence, Moved Server-Side</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..700,50;1,9..144,400..700,50&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ============ THEME: Wine & Ink, burgundy-rose (dark only) ============
+   A warm wine ground rather than navy, Fraunces display with a slight
+   optical-size bump and soft terminals, Space Grotesk for body, Space
+   Mono for code. Accent is a lifted rose for contrast against the deep
+   background. */
+:root {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'Space Mono', 'SF Mono', Consolas, monospace;
+
+  --bg: #1e1613;
+  --bg-2: #2a1d18;
+  --surface: #32241d;
+  --surface2: #3a2a23;
+  --surface-3: #422f27;
+  --border: rgba(240, 230, 210, 0.10);
+  --border-bright: rgba(240, 230, 210, 0.24);
+
+  --text: #f0ead9;
+  --text-soft: #d4c9b4;
+  --text-dim: #9a8a76;
+  --text-faint: #6a5b4e;
+
+  --accent: #e88898;
+  --accent-bright: #f5a1af;
+  --accent-soft: rgba(232, 136, 152, 0.12);
+  --accent-wash: rgba(232, 136, 152, 0.05);
+  --accent-deep: #c46878;
+
+  --good: #8fbb8e;
+  --warn: #e1b06a;
+  --rose: #e88898;
+  --cool: #8fb5c4;
+
+  --code-bg: #140d0a;
+  --code-border: rgba(232, 136, 152, 0.18);
+  --code-text: #f0ead9;
+  --kw: #f5a1af;
+  --str: #d3c78a;
+  --num: #e8b585;
+  --cls: #f5c4ca;
+  --sym: #c4b5a8;
+  --com: #8a7868;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: dark;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+/* ============ DECK ENGINE ============ */
+.deck {
+  height: 100dvh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.slide {
+  height: 100dvh;
+  min-height: 640px;
+  scroll-snap-align: start;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(40px, 5vh, 72px) clamp(40px, 7vw, 120px);
+  isolation: isolate;
+  /* Animations use opacity ONLY. No transforms on reveal so Back/Forward
+     cannot catch an element mid-translate and leave it visually shifted. */
+  opacity: 0;
+  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slide.visible { opacity: 1; }
+
+.slide::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(ellipse at 20% 80%, var(--accent-soft) 0%, transparent 55%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.9;
+}
+.slide:nth-child(even)::before {
+  background-image: radial-gradient(ellipse at 80% 20%, var(--accent-soft) 0%, transparent 55%);
+}
+.slide > * { position: relative; z-index: 1; }
+
+/* Child reveals are opacity-only too. Once an element is marked .visible it
+   stays visible; no resetting on re-intersection. Rapid Back/Forward cannot
+   leave a mid-transform artifact. */
+.reveal {
+  opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slide.visible .reveal { opacity: 1; }
+.slide.visible .reveal:nth-child(1)  { transition-delay: 0.05s; }
+.slide.visible .reveal:nth-child(2)  { transition-delay: 0.12s; }
+.slide.visible .reveal:nth-child(3)  { transition-delay: 0.19s; }
+.slide.visible .reveal:nth-child(4)  { transition-delay: 0.26s; }
+.slide.visible .reveal:nth-child(5)  { transition-delay: 0.33s; }
+.slide.visible .reveal:nth-child(6)  { transition-delay: 0.40s; }
+.slide.visible .reveal:nth-child(7)  { transition-delay: 0.47s; }
+.slide.visible .reveal:nth-child(8)  { transition-delay: 0.54s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .slide, .reveal {
+    opacity: 1 !important;
+    transition: none !important;
+  }
+}
+
+/* ============ TYPOGRAPHY ============ */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 1.1vw, 13px);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 2.4px;
+  color: var(--accent);
+  margin-bottom: clamp(14px, 2vh, 22px);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.kicker::before {
+  content: '';
+  width: 22px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.display {
+  font-family: var(--font-display);
+  font-size: clamp(52px, 9vw, 124px);
+  font-weight: 500;
+  font-variation-settings: 'opsz' 144, 'SOFT' 100;
+  line-height: 0.98;
+  letter-spacing: -2.5px;
+  color: var(--text);
+  text-wrap: balance;
+}
+.display em { font-style: italic; color: var(--accent); font-variation-settings: 'opsz' 144, 'SOFT' 100; }
+
+.heading {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 5.4vw, 66px);
+  font-weight: 500;
+  font-variation-settings: 'opsz' 80, 'SOFT' 100;
+  line-height: 1.04;
+  letter-spacing: -1.4px;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.subtitle {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(20px, 2.6vw, 28px);
+  line-height: 1.35;
+  color: var(--text-soft);
+  text-wrap: pretty;
+}
+
+.body {
+  font-size: clamp(14px, 1.4vw, 18px);
+  line-height: 1.6;
+  color: var(--text-soft);
+  text-wrap: pretty;
+}
+.body strong { color: var(--text); font-weight: 600; }
+.body code { font-family: var(--font-mono); font-size: 0.9em; color: var(--accent-bright); background: var(--accent-wash); padding: 1px 7px; border-radius: 3px; }
+
+/* ============ TITLE SLIDE ============ */
+.slide--title {
+  justify-content: center;
+  align-items: flex-start;
+  padding: clamp(60px, 9vh, 120px) clamp(48px, 9vw, 140px);
+}
+.slide--title .display { max-width: 20ch; }
+.slide--title .sub {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(22px, 3vw, 34px);
+  color: var(--text-soft);
+  margin-top: clamp(20px, 3vh, 32px);
+  max-width: 36ch;
+  line-height: 1.3;
+}
+.slide--title .stamp {
+  position: absolute;
+  bottom: clamp(36px, 5vh, 60px);
+  left: clamp(48px, 9vw, 140px);
+  right: clamp(48px, 9vw, 140px);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  letter-spacing: 0.4px;
+}
+.slide--title .stamp span.accent { color: var(--accent); }
+
+/* Badge in the corner */
+.ticket {
+  position: absolute;
+  top: clamp(30px, 4.5vh, 52px);
+  right: clamp(30px, 4vw, 56px);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  z-index: 2;
+}
+.ticket__num {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.4vw, 30px);
+  font-style: italic;
+  color: var(--accent);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Decorative corner tick */
+.corner-tick {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 140px;
+  height: 140px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+}
+
+/* ============ CONTENT LAYOUTS ============ */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: clamp(32px, 5vw, 72px);
+  align-items: start;
+  width: 100%;
+}
+.grid-2--right { grid-template-columns: 2fr 3fr; }
+.grid-2--even  { grid-template-columns: 1fr 1fr; }
+
+.bullets {
+  list-style: none;
+  margin-top: clamp(20px, 3vh, 28px);
+  display: grid;
+  gap: clamp(10px, 1.4vh, 16px);
+}
+.bullets li {
+  padding: 10px 0 10px 22px;
+  position: relative;
+  font-size: clamp(14px, 1.4vw, 18px);
+  line-height: 1.55;
+  color: var(--text-soft);
+  border-top: 1px solid var(--border);
+}
+.bullets li:first-child { border-top: none; padding-top: 4px; }
+.bullets li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.bullets li:first-child::before { top: 12px; }
+.bullets li strong { color: var(--text); font-weight: 600; }
+.bullets li code { font-family: var(--font-mono); font-size: 0.9em; color: var(--accent-bright); }
+
+/* ============ CARDS ============ */
+.cards-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  margin-top: clamp(24px, 4vh, 40px);
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: clamp(20px, 2.5vh, 28px) clamp(18px, 2vw, 24px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.card__num {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.card__title {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.4vw, 30px);
+  line-height: 1.15;
+  color: var(--text);
+  margin-bottom: 12px;
+  text-wrap: balance;
+}
+.card__body {
+  font-size: clamp(13px, 1.25vw, 15px);
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+.card__body code { font-family: var(--font-mono); font-size: 0.88em; color: var(--accent-bright); background: var(--accent-wash); padding: 1px 6px; border-radius: 3px; }
+
+/* ============ CODE FRAMES ============ */
+.code-frame {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.code-frame__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  background: rgba(127, 196, 207, 0.05);
+  border-bottom: 1px solid var(--code-border);
+}
+.code-frame__file {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--accent-bright);
+  letter-spacing: 0.3px;
+}
+.code-frame__lang {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-faint);
+}
+.code-frame pre {
+  margin: 0;
+  padding: clamp(14px, 2.5vh, 22px) clamp(16px, 2.5vw, 26px);
+  overflow: auto;
+  flex: 1;
+}
+.code-frame code {
+  font-family: var(--font-mono);
+  font-size: clamp(11.5px, 1.05vw, 14px);
+  line-height: 1.6;
+  color: var(--code-text);
+  white-space: pre;
+  display: block;
+}
+.code-frame code .kw  { color: var(--kw); font-weight: 500; }
+.code-frame code .str { color: var(--str); }
+.code-frame code .num { color: var(--num); }
+.code-frame code .cls { color: var(--cls); }
+.code-frame code .sym { color: var(--sym); }
+.code-frame code .com { color: var(--com); font-style: italic; }
+
+.code-note {
+  font-size: clamp(12.5px, 1.2vw, 14.5px);
+  color: var(--text-dim);
+  margin-top: clamp(12px, 1.6vh, 18px);
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.code-note::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  min-width: 3px;
+  align-self: stretch;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* ============ BEFORE / AFTER ============ */
+.ba {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 2.4vw, 32px);
+  margin-top: clamp(24px, 4vh, 36px);
+}
+.ba__col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: clamp(22px, 3vh, 36px) clamp(22px, 2.5vw, 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ba__col--before { border-left: 3px solid var(--rose); }
+.ba__col--after  { border-left: 3px solid var(--accent); }
+.ba__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+}
+.ba__col--before .ba__label { color: var(--rose); }
+.ba__col--after  .ba__label { color: var(--accent); }
+.ba__title {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.6vw, 32px);
+  line-height: 1.15;
+  color: var(--text);
+  text-wrap: balance;
+}
+.ba__body { font-size: clamp(13px, 1.3vw, 15.5px); line-height: 1.55; color: var(--text-soft); }
+.ba__body strong { color: var(--text); }
+
+/* ============ TABLE-ISH ROWS ============ */
+.matrix {
+  margin-top: clamp(22px, 3.5vh, 32px);
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.matrix__row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 120px;
+  gap: 0;
+  background: var(--surface);
+}
+.matrix__row--head {
+  background: var(--bg-2);
+}
+.matrix__cell {
+  padding: clamp(12px, 1.5vh, 16px) clamp(16px, 2vw, 22px);
+  font-size: clamp(13px, 1.25vw, 15.5px);
+  line-height: 1.45;
+  color: var(--text-soft);
+  display: flex;
+  align-items: center;
+}
+.matrix__cell:first-child {
+  font-family: var(--font-mono);
+  font-size: clamp(12px, 1.1vw, 13.5px);
+  color: var(--text);
+  font-weight: 500;
+}
+.matrix__row--head .matrix__cell {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.matrix__cell--end { justify-content: flex-end; }
+.pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+.pill--yes { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); border: 1px solid color-mix(in srgb, var(--good) 35%, transparent); }
+.pill--no  { color: var(--rose); background: color-mix(in srgb, var(--rose) 10%, transparent); border: 1px solid color-mix(in srgb, var(--rose) 32%, transparent); }
+
+/* ============ BAND ============ */
+.band {
+  margin-top: clamp(22px, 3.5vh, 34px);
+  padding: clamp(16px, 2vh, 22px) clamp(20px, 3vw, 32px);
+  background: var(--accent-wash);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  font-size: clamp(13px, 1.3vw, 16px);
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+.band strong { color: var(--text); }
+
+/* ============ FLOW ============ */
+.flow {
+  margin-top: clamp(24px, 3.5vh, 32px);
+  display: grid;
+  gap: clamp(14px, 2vh, 20px);
+}
+.flow-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.flow-step {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: clamp(14px, 2vh, 20px) clamp(14px, 1.8vw, 20px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.flow-step--cool { border-top-color: var(--cool); }
+.flow-step--ghost { border-top-color: var(--text-faint); }
+.flow-step__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.flow-step__title {
+  font-family: var(--font-mono);
+  font-size: clamp(12.5px, 1.2vw, 14.5px);
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+.flow-step__desc {
+  font-size: clamp(12px, 1.15vw, 14px);
+  line-height: 1.5;
+  color: var(--text-soft);
+  flex: 1;
+}
+.flow-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  color: var(--accent);
+  flex-shrink: 0;
+  opacity: 0.55;
+  font-family: var(--font-mono);
+  font-size: 20px;
+}
+.flow-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: inline-block;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-2);
+}
+
+/* ============ DIAGRAM ATTR vs IDL ============ */
+.swap {
+  margin-top: clamp(22px, 3.5vh, 32px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(18px, 2.5vw, 32px);
+}
+.swap__box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: clamp(20px, 2.8vh, 28px) clamp(20px, 2.4vw, 28px);
+  font-family: var(--font-mono);
+  font-size: clamp(12.5px, 1.15vw, 14px);
+  line-height: 1.7;
+  color: var(--code-text);
+  background: var(--code-bg);
+  border-color: var(--code-border);
+  overflow-wrap: break-word;
+}
+.swap__label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+.swap__label--hot { color: var(--rose); }
+.swap__label--ok  { color: var(--accent); }
+
+/* ============ COMMIT STORY ============ */
+.commits {
+  margin-top: clamp(24px, 4vh, 32px);
+  display: grid;
+  gap: 2px;
+  background: var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.commit-row {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 16px;
+  background: var(--surface);
+  padding: clamp(11px, 1.4vh, 15px) clamp(16px, 2vw, 22px);
+  align-items: baseline;
+}
+.commit-row__num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 1.2px;
+  font-variant-numeric: tabular-nums;
+}
+.commit-row__title {
+  font-family: var(--font-mono);
+  font-size: clamp(12.5px, 1.2vw, 14.5px);
+  color: var(--text);
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+/* ============ REFS ============ */
+.refs {
+  display: grid;
+  gap: 14px;
+  margin-top: clamp(28px, 4vh, 44px);
+  max-width: 760px;
+}
+.ref {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: clamp(18px, 2vw, 32px);
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  align-items: baseline;
+}
+.ref:last-child { border-bottom: 1px solid var(--border); }
+.ref__key {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--text-dim);
+}
+.ref__val {
+  font-family: var(--font-mono);
+  font-size: clamp(12.5px, 1.2vw, 14.5px);
+  color: var(--text);
+  word-break: break-all;
+}
+.ref__val a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+
+/* ============ NAV CHROME ============ */
+.deck-progress {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  background: var(--accent);
+  z-index: 100;
+  transition: width 0.3s ease;
+  pointer-events: none;
+}
+.deck-dots {
+  position: fixed;
+  right: clamp(14px, 2vw, 28px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  z-index: 100;
+  padding: 8px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+.deck-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  opacity: 0.3;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 0.18s ease, background 0.18s ease;
+}
+.deck-dot:hover { opacity: 0.7; }
+.deck-dot.active { opacity: 1; background: var(--accent); }
+.deck-counter {
+  position: fixed;
+  bottom: clamp(16px, 2.5vh, 28px);
+  right: clamp(18px, 2.5vw, 32px);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  z-index: 100;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--bg) 75%, transparent);
+  backdrop-filter: blur(8px);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+.deck-counter .accent { color: var(--accent); }
+.deck-hints {
+  position: fixed;
+  bottom: clamp(16px, 2.5vh, 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  opacity: 0.65;
+  z-index: 100;
+  transition: opacity 0.6s ease;
+  white-space: nowrap;
+  letter-spacing: 1px;
+}
+.deck-hints.faded { opacity: 0; pointer-events: none; }
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 1024px) {
+  .slide { padding: clamp(24px, 4vh, 48px) clamp(28px, 5vw, 60px); }
+  .grid-2, .grid-2--right, .grid-2--even { grid-template-columns: 1fr; gap: 28px; }
+  .cards-3 { grid-template-columns: 1fr; }
+  .ba { grid-template-columns: 1fr; }
+  .swap { grid-template-columns: 1fr; }
+  .matrix__row { grid-template-columns: 1fr 1fr 100px; }
+  .flow-row { flex-direction: column; gap: 10px; }
+  .flow-arrow { transform: rotate(90deg); padding: 4px 0; }
+  .slide--title .stamp { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+@media (max-height: 700px) {
+  .display { font-size: clamp(40px, 8vw, 76px); }
+  .heading { font-size: clamp(26px, 4.6vw, 44px); }
+}
+@media (max-height: 560px) {
+  .corner-tick { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+<!-- 1. TITLE -->
+<section class="slide slide--title">
+  <svg class="corner-tick" viewBox="0 0 140 140" aria-hidden="true">
+    <line x1="140" y1="0" x2="140" y2="50" stroke="currentColor" stroke-width="1" opacity="0.7" style="color: var(--accent)"/>
+    <line x1="90" y1="0" x2="140" y2="0" stroke="currentColor" stroke-width="1" opacity="0.7" style="color: var(--accent)"/>
+    <circle cx="140" cy="0" r="3" fill="currentColor" style="color: var(--accent)"/>
+  </svg>
+  <div class="ticket">
+    <span>Linear</span>
+    <span class="ticket__num">AUD-694</span>
+  </div>
+  <p class="kicker reveal">Filter Persistence &middot; Server-Side Move</p>
+  <h1 class="display reveal">Filters that <em>remember.</em><br>And don't flash.</h1>
+  <p class="sub reveal">
+    localStorage is out. A jsonb row per user, per page, restored before the view renders. Targeted links stop overwriting your defaults. The cached preview stops flashing stale chips.
+  </p>
+  <div class="stamp reveal">
+    <div>Branch<br><span class="accent">chrismiles/aud-694-move-filter-persistence-server-side</span></div>
+    <div style="text-align:right;">Chris Miles<br><span style="color:var(--text-dim)">Audit Engineering</span></div>
+  </div>
+</section>
+
+<!-- 2. THE PROBLEM -->
+<section class="slide">
+  <div class="grid-2">
+    <div>
+      <p class="kicker reveal">The flash</p>
+      <h2 class="heading reveal">Default-painted. Then yanked.</h2>
+      <p class="body reveal" style="margin-top: clamp(20px, 3vh, 28px); max-width: 52ch;">
+        Filter state lived in <code>localStorage</code> under keys like <code>filterMemory:/audits</code>. On <code>connect()</code>, a Stimulus controller read the saved query string and called <code>Turbo.visit(savedUrl, { action: "replace" })</code>. The server already rendered the default-state filter form by then, so the user saw defaults paint, then a re-render snapped to their saved state.
+      </p>
+      <p class="body reveal" style="margin-top: 14px; max-width: 52ch;">
+        The flash was <strong>structural.</strong> Any JS-based restoration runs after the first paint by definition.
+      </p>
+    </div>
+    <div class="reveal" style="margin-top: 12px;">
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; position: relative;">
+        <div style="font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1.8px; color: var(--rose); margin-bottom: 14px;">Before, each visit</div>
+        <ol style="list-style: none; counter-reset: flash; display: grid; gap: 12px;">
+          <li style="counter-increment: flash; display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: baseline;">
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums;">01</span>
+            <span style="font-size: 14px; color: var(--text-soft); line-height: 1.5;">Server renders filter form with defaults (status=open, auditor=me).</span>
+          </li>
+          <li style="counter-increment: flash; display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: baseline;">
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums;">02</span>
+            <span style="font-size: 14px; color: var(--text-soft); line-height: 1.5;">Browser paints. User sees default state.</span>
+          </li>
+          <li style="counter-increment: flash; display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: baseline;">
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums;">03</span>
+            <span style="font-size: 14px; color: var(--text-soft); line-height: 1.5;">Stimulus connects, reads localStorage, triggers a Turbo visit.</span>
+          </li>
+          <li style="counter-increment: flash; display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: baseline;">
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums;">04</span>
+            <span style="font-size: 14px; color: var(--text); line-height: 1.5; font-weight: 500;">Flash. Page re-renders with saved state.</span>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. THE SHAPE OF THE FIX -->
+<section class="slide">
+  <p class="kicker reveal">The move</p>
+  <h2 class="heading reveal" style="max-width: 22ch;">Push persistence under the render.</h2>
+  <div class="cards-3">
+    <div class="card reveal">
+      <div class="card__num">01 / Store</div>
+      <div class="card__title">One jsonb row per user, per page.</div>
+      <div class="card__body">A new <code>user_filter_preferences</code> table keyed on <code>(user_id, page_key)</code>. Durable, queryable, survives browser resets and follows the user across devices.</div>
+    </div>
+    <div class="card reveal">
+      <div class="card__num">02 / Restore</div>
+      <div class="card__title">Before the view renders.</div>
+      <div class="card__body">A controller concern hydrates filter params from storage on a bare visit, so the first HTML the server emits already carries the user's saved values. No JS round-trip.</div>
+    </div>
+    <div class="card reveal">
+      <div class="card__num">03 / Write</div>
+      <div class="card__title">Only on deliberate edits.</div>
+      <div class="card__body">A signal from autosave gates the write, so link clicks and server redirects stop overwriting preferences that the user never asked to change.</div>
+    </div>
+  </div>
+  <div class="band reveal">
+    First paint is correct. No flash, no second trip, no client-side state owning the source of truth.
+  </div>
+</section>
+
+<!-- 4. THE TABLE -->
+<section class="slide">
+  <p class="kicker reveal">Schema</p>
+  <h2 class="heading reveal" style="max-width: 18ch;">One row. One composite index.</h2>
+  <div class="code-frame reveal" style="margin-top: clamp(22px, 3vh, 30px); max-width: 920px;">
+    <div class="code-frame__head">
+      <span class="code-frame__file">db/migrate/..._create_user_filter_preferences.rb</span>
+      <span class="code-frame__lang">Ruby</span>
+    </div>
+    <pre><code><span class="kw">create_table</span> <span class="sym">:user_filter_preferences</span> <span class="kw">do</span> |t|
+  t.references <span class="sym">:user</span>,  null: <span class="kw">false</span>, foreign_key: <span class="kw">true</span>, index: <span class="kw">false</span>
+  t.string     <span class="sym">:page_key</span>, null: <span class="kw">false</span>
+  t.jsonb      <span class="sym">:filters</span>,  null: <span class="kw">false</span>, default: {}
+
+  t.timestamps
+<span class="kw">end</span>
+
+<span class="kw">add_index</span> <span class="sym">:user_filter_preferences</span>, [<span class="sym">:user_id</span>, <span class="sym">:page_key</span>], unique: <span class="kw">true</span></code></pre>
+  </div>
+  <p class="body reveal" style="margin-top: clamp(18px, 2.5vh, 24px); max-width: 64ch; color: var(--text-dim);">
+    <code>page_key</code> mirrors Rails <code>controller_path</code>, so ten of eleven filter pages wire up with zero per-controller mapping. The unique composite prevents duplicate rows and gives the upsert a clean ON CONFLICT target.
+  </p>
+</section>
+
+<!-- 5. MODEL API -->
+<section class="slide">
+  <p class="kicker reveal">Model API</p>
+  <h2 class="heading reveal" style="max-width: 18ch;">remember, recall, forget.</h2>
+  <div class="code-frame reveal" style="margin-top: clamp(20px, 3vh, 28px);">
+    <div class="code-frame__head">
+      <span class="code-frame__file">app/models/user_filter_preference.rb</span>
+      <span class="code-frame__lang">Ruby</span>
+    </div>
+    <pre><code><span class="kw">def</span> <span class="sym">self.remember</span>(user:, page_key:, filters:)
+  filters = filters.to_h
+
+  existing = find_by(user:, page_key:)
+  <span class="kw">return</span> <span class="kw">if</span> existing.<span class="kw">nil</span>? &amp;&amp; filters.blank?       <span class="com"># skip first-visit noise</span>
+  <span class="kw">return</span> existing <span class="kw">if</span> existing &amp;&amp; existing.filters == filters  <span class="com"># no-op write</span>
+
+  record = existing || new(user:, page_key:)
+  record.filters = filters
+  record.save!
+  record
+<span class="kw">rescue</span> <span class="cls">ActiveRecord::RecordNotUnique</span>                     <span class="com"># concurrent-insert race</span>
+  record = find_by(user:, page_key:)
+  record&amp;.update!(filters:)
+  record
+<span class="kw">rescue</span> <span class="cls">ActiveRecord::ActiveRecordError</span> =&gt; error
+  report_failure(error, user:, page_key:, operation: <span class="sym">:remember</span>)
+  <span class="kw">nil</span>
+<span class="kw">end</span></code></pre>
+  </div>
+  <div class="code-note reveal">
+    <div>Any storage failure logs a warning and reports to Bugsnag at warning severity. Filter persistence is a convenience; a DB blip should never take down the index page that triggered it.</div>
+  </div>
+</section>
+
+<!-- 6. THE CONCERN -->
+<section class="slide">
+  <p class="kicker reveal">Orchestrator</p>
+  <h2 class="heading reveal" style="max-width: 24ch;">FilterPersistence ties storage to the filter.</h2>
+  <div class="code-frame reveal" style="margin-top: clamp(18px, 2.5vh, 24px);">
+    <div class="code-frame__head">
+      <span class="code-frame__file">app/controllers/concerns/filter_persistence.rb</span>
+      <span class="code-frame__lang">Ruby</span>
+    </div>
+    <pre><code><span class="kw">def</span> <span class="sym">with_filter_persistence</span>(page_key: controller_path)
+  filter = yield(effective_filter_params(page_key:))
+  remember_filter_state(filter, page_key:) <span class="kw">if</span> autosave_submitted?
+  filter
+<span class="kw">end</span>
+
+<span class="kw">def</span> <span class="sym">autosave_submitted?</span>
+  params[<span class="sym">:autosaving</span>].present?
+<span class="kw">end</span>
+
+<span class="com"># Returns the request params when the URL carries filters, or a fresh</span>
+<span class="com"># Parameters copy with stored values layered in on a bare visit.</span>
+<span class="kw">def</span> <span class="sym">effective_filter_params</span>(page_key:)
+  <span class="kw">return</span> params <span class="kw">if</span> params[<span class="sym">:filter</span>].present?
+
+  stored = <span class="cls">UserFilterPreference</span>.recall(user: <span class="cls">Current</span>.user, page_key:)
+  stored.is_a?(<span class="cls">Hash</span>) ? params.merge(filter: stored) : params
+<span class="kw">end</span></code></pre>
+  </div>
+  <div class="code-note reveal">
+    <div><strong>No param mutation.</strong> <code style="font-family:var(--font-mono);color:var(--accent-bright)">params.merge</code> returns a new Parameters object; the request's own <code style="font-family:var(--font-mono);color:var(--accent-bright)">params</code> stays what the user sent. The composed copy flows through the normal filter API as if it had always been there.</div>
+  </div>
+</section>
+
+<!-- 7. THE FACTORY CASE -->
+<section class="slide">
+  <div class="grid-2">
+    <div>
+      <p class="kicker reveal">The factory case</p>
+      <h2 class="heading reveal">One concern. Two entry points.</h2>
+      <p class="body reveal" style="margin-top: 18px; max-width: 48ch;">
+        Most controllers build their filter with <code>Filter.new(...)</code> and then assign params. <code>apply_filter_params</code> wraps that shape.
+      </p>
+      <p class="body reveal" style="margin-top: 12px; max-width: 48ch;">
+        Reporting is different. <code>ReportingFilter.for_request</code> is a factory that reads params during construction, so restore has to happen <em style="font-family:var(--font-display); font-style: italic;">before</em> the filter exists. The block form yields the effective params and lets the caller thread them wherever the factory would have received <code>params</code>.
+      </p>
+    </div>
+    <div class="reveal">
+      <div class="code-frame">
+        <div class="code-frame__head">
+          <span class="code-frame__file">app/controllers/reporting_controller.rb</span>
+          <span class="code-frame__lang">Ruby</span>
+        </div>
+        <pre><code><span class="kw">def</span> <span class="sym">index</span>
+  authorize <span class="sym">:reporting</span>
+
+  @filter = with_filter_persistence <span class="kw">do</span> |effective_params|
+    <span class="cls">ReportingFilter</span>.for_request(
+      params: effective_params,
+      requester: <span class="cls">Current</span>.user,
+      allowed_sources: <span class="cls">Current</span>.allowed_sources
+    )
+  <span class="kw">end</span>
+
+  <span class="com"># ... render ...</span>
+<span class="kw">end</span></code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. THE SIGNAL -->
+<section class="slide">
+  <p class="kicker reveal">The write signal</p>
+  <h2 class="heading reveal" style="max-width: 24ch;">autosaving=true. That's the line.</h2>
+  <p class="body reveal" style="margin-top: 18px; max-width: 68ch;">
+    <code>autosave_controller</code> stamps <code>autosaving=true</code> on every request it initiates. Persistence fires only when that flag is present. The server cannot see HTTP referers reliably or tell a form submission apart from a link click through URL alone. The flag gives us an intent signal that's explicit and already wired up.
+  </p>
+  <div class="swap reveal">
+    <div class="swap__box">
+      <span class="swap__label swap__label--hot">Old path (body only)</span>
+      <span style="color: var(--code-text)">body.append(<span style="color: var(--str)">'autosaving'</span>, <span style="color: var(--str)">'true'</span>)</span><br>
+      <span style="color: var(--com); font-style: italic; font-size: 12.5px;">GET carries params in the URL.</span><br>
+      <span style="color: var(--com); font-style: italic; font-size: 12.5px;">The body is null. Silent no-op.</span>
+    </div>
+    <div class="swap__box">
+      <span class="swap__label swap__label--ok">New path (URL or body)</span>
+      <span style="color: var(--code-text)"><span style="color: var(--kw)">if</span> (body) body.append(...)</span><br>
+      <span style="color: var(--code-text)"><span style="color: var(--kw)">else</span> url.searchParams.append(...)</span><br>
+      <span style="color: var(--com); font-style: italic; font-size: 12.5px;">Reaches the server on every autosave.</span>
+    </div>
+  </div>
+</section>
+
+<!-- 9. THE MATRIX -->
+<section class="slide">
+  <p class="kicker reveal">Persistence semantics</p>
+  <h2 class="heading reveal">Who changes your defaults?</h2>
+  <div class="matrix reveal">
+    <div class="matrix__row matrix__row--head">
+      <div class="matrix__cell">Action</div>
+      <div class="matrix__cell">Example</div>
+      <div class="matrix__cell matrix__cell--end">Persists?</div>
+    </div>
+    <div class="matrix__row">
+      <div class="matrix__cell">Form edit</div>
+      <div class="matrix__cell">User types in coder_search, picks a chip, clears a filter</div>
+      <div class="matrix__cell matrix__cell--end"><span class="pill pill--yes">Yes</span></div>
+    </div>
+    <div class="matrix__row">
+      <div class="matrix__cell">Link click</div>
+      <div class="matrix__cell">Trigger execution audit count; coder page link</div>
+      <div class="matrix__cell matrix__cell--end"><span class="pill pill--no">No</span></div>
+    </div>
+    <div class="matrix__row">
+      <div class="matrix__cell">Server redirect</div>
+      <div class="matrix__cell">redirect_to audits_path(filter: {status: "open"})</div>
+      <div class="matrix__cell matrix__cell--end"><span class="pill pill--no">No</span></div>
+    </div>
+    <div class="matrix__row">
+      <div class="matrix__cell">Shared URL</div>
+      <div class="matrix__cell">Someone pastes you a filtered link</div>
+      <div class="matrix__cell matrix__cell--end"><span class="pill pill--no">No</span></div>
+    </div>
+    <div class="matrix__row">
+      <div class="matrix__cell">Bare visit</div>
+      <div class="matrix__cell">Open /audits with no query string</div>
+      <div class="matrix__cell matrix__cell--end"><span class="pill pill--no">No</span></div>
+    </div>
+  </div>
+  <div class="band reveal">
+    <strong>Intent-first semantics.</strong> A link that happened to carry filters no longer clobbers the user's saved state the next time they visit.
+  </div>
+</section>
+
+<!-- 10. BACK / FORWARD -->
+<section class="slide">
+  <div class="grid-2">
+    <div>
+      <p class="kicker reveal">Back / Forward</p>
+      <h2 class="heading reveal">From chip-by-chip to page-by-page.</h2>
+      <p class="body reveal" style="margin-top: 18px; max-width: 48ch;">
+        <code>filter_url_sync_controller</code> used to push a history entry on every autosave flush. Hitting Back on a filtered audits page would rewind filter edits one at a time before leaving the page. Three chips added, three presses of Back to escape.
+      </p>
+      <p class="body reveal" style="margin-top: 12px; max-width: 48ch;">
+        The controller is now 60 lines instead of 204. <code>replaceState</code> only. Every filter edit updates the URL in place, so the history stack reflects pages visited, not filter states traversed. Bookmarking still works.
+      </p>
+    </div>
+    <div class="reveal">
+      <div class="ba">
+        <div class="ba__col ba__col--before">
+          <span class="ba__label">Before</span>
+          <span class="ba__title">Back undid edits.</span>
+          <span class="ba__body">pushState per autosave flush. Three chips = three history entries. Back went through your filter history before leaving the page.</span>
+        </div>
+        <div class="ba__col ba__col--after">
+          <span class="ba__label">After</span>
+          <span class="ba__title">Back leaves the page.</span>
+          <span class="ba__body">replaceState on every submission. One history entry per page visit. Back goes where the user expects: the previous page.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11. TURBO CACHE PROBLEM -->
+<section class="slide">
+  <p class="kicker reveal">The quiet Turbo gap</p>
+  <h2 class="heading reveal" style="max-width: 24ch;">HTML attributes and IDL properties disagree.</h2>
+  <p class="body reveal" style="margin-top: 16px; max-width: 72ch;">
+    Turbo's page cache snapshots the outgoing page via <code>outerHTML</code>, which reads <strong>attributes</strong>. When you type in an input or pick an option, the browser updates the <strong>IDL property</strong> (<code>input.value</code>, <code>option.selected</code>) but does not touch the matching attribute. The cached preview on Back reflects the attribute world; the user's edits live in the IDL world.
+  </p>
+  <div class="swap reveal">
+    <div class="swap__box">
+      <span class="swap__label swap__label--hot">Attribute world (what Turbo sees)</span>
+      &lt;input <span style="color: var(--kw)">name</span>=<span style="color: var(--str)">"filter[encounter_number]"</span> <span style="color: var(--kw)">value</span>=<span style="color: var(--str)">""</span>&gt;<br>
+      &lt;option <span style="color: var(--kw)">value</span>=<span style="color: var(--str)">"monthly"</span>&gt;Monthly&lt;/option&gt;
+    </div>
+    <div class="swap__box">
+      <span class="swap__label swap__label--ok">IDL world (what the user did)</span>
+      input.value = <span style="color: var(--str)">"ENC-12345"</span><br>
+      option.selected = <span style="color: var(--kw)">true</span>
+    </div>
+  </div>
+  <div class="band reveal">
+    <strong>Turbo deliberately doesn't do this promotion.</strong> The Hotwired team closed the request and pointed at <code>turbo:before-cache</code> as the right seam. So we take the seam.
+  </div>
+</section>
+
+<!-- 12. CACHE-SAFE-FORM -->
+<section class="slide">
+  <p class="kicker reveal">cache-safe-form</p>
+  <h2 class="heading reveal" style="max-width: 22ch;">Promote IDL to attribute before the snapshot.</h2>
+  <div class="code-frame reveal" style="margin-top: clamp(18px, 2.5vh, 24px);">
+    <div class="code-frame__head">
+      <span class="code-frame__file">app/javascript/lib/form_state.js</span>
+      <span class="code-frame__lang">JavaScript</span>
+    </div>
+    <pre><code><span class="kw">export function</span> <span class="sym">promoteFormStateToAttributes</span>(root) {
+  root.querySelectorAll(<span class="str">"input, textarea, option"</span>).forEach((element) =&gt; {
+    <span class="kw">switch</span> (element.tagName) {
+      <span class="kw">case</span> <span class="str">"INPUT"</span>:    promoteInput(element); <span class="kw">break</span>
+      <span class="kw">case</span> <span class="str">"TEXTAREA"</span>: element.textContent = element.value; <span class="kw">break</span>
+      <span class="kw">case</span> <span class="str">"OPTION"</span>:   element.toggleAttribute(<span class="str">"selected"</span>, element.selected); <span class="kw">break</span>
+    }
+  })
+}</code></pre>
+  </div>
+  <div class="code-note reveal">
+    <div>A Stimulus controller (<code style="font-family:var(--font-mono);color:var(--accent-bright)">cache-safe-form</code>) listens for <code style="font-family:var(--font-mono);color:var(--accent-bright)">turbo:before-cache</code> and calls the helper against its form. Idempotent and composable with other before-cache handlers: running it twice produces the same DOM.</div>
+  </div>
+</section>
+
+<!-- 13. TOMSELECT SPECIAL -->
+<section class="slide">
+  <div class="grid-2">
+    <div>
+      <p class="kicker reveal">TomSelect, the trickster</p>
+      <h2 class="heading reveal">Two extra lines that matter.</h2>
+      <p class="body reveal" style="margin-top: 16px; max-width: 48ch;">
+        TomSelect snapshots <code>innerHTML</code> at init time. On <code>destroy()</code>, it restores that snapshot, reverting the <code>&lt;select&gt;</code> to its pre-init state and losing any user picks. The generic <code>cache-safe-form</code> promotion is not enough on its own.
+      </p>
+      <p class="body reveal" style="margin-top: 12px; max-width: 48ch;">
+        <code>select_controller</code> absorbs the extra dance in its own before-cache handler. Three independent <code>try</code>/<code>catch</code> steps so a TomSelect internals throw cannot skip the visibility toggle that hides the raw native listbox during the outgoing view transition.
+      </p>
+    </div>
+    <div class="reveal">
+      <div class="code-frame">
+        <div class="code-frame__head">
+          <span class="code-frame__file">app/javascript/controllers/select_controller.js</span>
+          <span class="code-frame__lang">JavaScript</span>
+        </div>
+        <pre><code><span class="com">// 1. Sync TomSelect's internal selection to the native select</span>
+ts.updateOriginalInput()
+
+<span class="com">// 2. Promote IDL state to attributes (shared helper)</span>
+promoteFormStateToAttributes(<span class="kw">this</span>.element)
+
+<span class="com">// 3. Override revertSettings so destroy() writes the live HTML</span>
+<span class="kw">if</span> (ts.revertSettings) {
+  ts.revertSettings.innerHTML = <span class="kw">this</span>.element.innerHTML
+}</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 14. ARCHITECTURAL PRINCIPLES -->
+<section class="slide">
+  <p class="kicker reveal">Why it holds up</p>
+  <h2 class="heading reveal">Four boundaries, drawn cleanly.</h2>
+  <div class="cards-3">
+    <div class="card reveal">
+      <div class="card__num">Boundary 01</div>
+      <div class="card__title">Non-mutation.</div>
+      <div class="card__body">The concern composes a new Parameters object instead of rewriting <code>params</code>. Downstream code sees the honest request; the merged copy flows only through the intended callsite.</div>
+    </div>
+    <div class="card reveal">
+      <div class="card__num">Boundary 02</div>
+      <div class="card__title">Signal-gated writes.</div>
+      <div class="card__body">One flag, one rule: deliberate submission writes, everything else displays. The rule is enforced at the concern's single exit point, not scattered across controllers.</div>
+    </div>
+    <div class="card reveal">
+      <div class="card__num">Boundary 03</div>
+      <div class="card__title">Defense in depth.</div>
+      <div class="card__body">URL-only fields like <code>audit_trigger_execution_id</code> are not in the filter form, so they can't be in an autosave submission, so they can't be persisted. The trap resolves at the right layer.</div>
+    </div>
+  </div>
+  <ul class="bullets reveal" style="max-width: 92ch; margin-top: clamp(16px, 2.5vh, 24px);">
+    <li><strong>Three independent controllers on every filter form.</strong> <code>autosave</code> persists, <code>filter-url-sync</code> keeps URLs clean, <code>cache-safe-form</code> protects the Turbo snapshot. Idempotent, composable, ordering-independent.</li>
+    <li><strong>Failure modes degrade.</strong> A Bugsnag-reported storage error logs, reports at warning severity, and returns nil. The index page keeps rendering.</li>
+  </ul>
+</section>
+
+<!-- 15. CLOSE -->
+<section class="slide">
+  <svg class="corner-tick" viewBox="0 0 140 140" aria-hidden="true">
+    <line x1="140" y1="0" x2="140" y2="50" stroke="currentColor" stroke-width="1" opacity="0.7" style="color: var(--accent)"/>
+    <line x1="90" y1="0" x2="140" y2="0" stroke="currentColor" stroke-width="1" opacity="0.7" style="color: var(--accent)"/>
+    <circle cx="140" cy="0" r="3" fill="currentColor" style="color: var(--accent)"/>
+  </svg>
+  <p class="kicker reveal">Wrap</p>
+  <h2 class="display reveal" style="font-size: clamp(44px, 7vw, 88px); max-width: 18ch;">Defaults follow you.<br>Not around you.</h2>
+  <p class="subtitle reveal" style="margin-top: clamp(18px, 2.5vh, 28px); max-width: 58ch;">
+    Filter state lives on the server now. The first paint is correct. Back works. Links stay links. The cached preview stops lying.
+  </p>
+  <div class="refs reveal">
+    <div class="ref">
+      <div class="ref__key">Linear</div>
+      <div class="ref__val"><a href="https://linear.app/kodehealth/issue/AUD-694">linear.app/kodehealth/issue/AUD-694</a></div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Branch</div>
+      <div class="ref__val">chrismiles/aud-694-move-filter-persistence-server-side</div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Shape</div>
+      <div class="ref__val">10 commits &middot; 1 table &middot; 1 model &middot; 1 concern &middot; 2 Stimulus controllers touched &middot; 1 new controller</div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Files</div>
+      <div class="ref__val">45 files (new, modified, deleted)</div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function() {
+  class SlideEngine {
+    constructor() {
+      this.deck = document.querySelector('.deck');
+      this.slides = Array.from(document.querySelectorAll('.slide'));
+      this.current = 0;
+      this.total = this.slides.length;
+      this.buildChrome();
+      this.bindEvents();
+      this.observe();
+      this.update();
+    }
+
+    buildChrome() {
+      const bar = document.createElement('div');
+      bar.className = 'deck-progress';
+      document.body.appendChild(bar);
+      this.bar = bar;
+
+      const dots = document.createElement('div');
+      dots.className = 'deck-dots';
+      this.slides.forEach((_, i) => {
+        const d = document.createElement('button');
+        d.className = 'deck-dot';
+        d.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+        d.title = 'Slide ' + (i + 1);
+        d.onclick = () => this.goTo(i);
+        dots.appendChild(d);
+      });
+      document.body.appendChild(dots);
+      this.dots = Array.from(dots.children);
+
+      const ctr = document.createElement('div');
+      ctr.className = 'deck-counter';
+      document.body.appendChild(ctr);
+      this.counter = ctr;
+
+      const hints = document.createElement('div');
+      hints.className = 'deck-hints';
+      hints.textContent = '\u2190 \u2192  scroll  space  esc';
+      document.body.appendChild(hints);
+      this.hints = hints;
+      this.hintTimer = setTimeout(() => hints.classList.add('faded'), 4500);
+    }
+
+    bindEvents() {
+      document.addEventListener('keydown', (e) => {
+        const t = e.target;
+        if (t && t.closest && t.closest('input, textarea, [contenteditable]')) return;
+        if (['ArrowDown', 'ArrowRight', ' ', 'PageDown'].includes(e.key)) {
+          e.preventDefault(); this.next();
+        } else if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)) {
+          e.preventDefault(); this.prev();
+        } else if (e.key === 'Home') {
+          e.preventDefault(); this.goTo(0);
+        } else if (e.key === 'End') {
+          e.preventDefault(); this.goTo(this.total - 1);
+        } else if (e.key === 'Escape') {
+          e.preventDefault(); this.goTo(0);
+        }
+        this.fadeHints();
+      });
+
+      let touchY;
+      this.deck.addEventListener('touchstart', (e) => {
+        touchY = e.touches[0].clientY;
+      }, { passive: true });
+      this.deck.addEventListener('touchend', (e) => {
+        const dy = touchY - e.changedTouches[0].clientY;
+        if (Math.abs(dy) > 55) { dy > 0 ? this.next() : this.prev(); }
+      });
+    }
+
+    observe() {
+      // Two-phase observer logic:
+      //   - A slide that crosses the midpoint marks .visible. That class is
+      //     sticky: once added, never removed, so every reveal inside stays at
+      //     its terminal opacity no matter how the user scrolls.
+      //   - A second observer tracks the "current" slide for progress/dots
+      //     using the higher intersection ratio. That's ephemeral and re-fires
+      //     freely without touching the .visible state.
+      const revealObs = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            revealObs.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.25 });
+      this.slides.forEach((s) => revealObs.observe(s));
+
+      const progressObs = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            this.current = this.slides.indexOf(entry.target);
+            this.update();
+          }
+        });
+      }, { threshold: 0.55 });
+      this.slides.forEach((s) => progressObs.observe(s));
+    }
+
+    goTo(i) {
+      const idx = Math.max(0, Math.min(i, this.total - 1));
+      this.slides[idx].scrollIntoView({ behavior: 'smooth' });
+    }
+    next() { if (this.current < this.total - 1) this.goTo(this.current + 1); }
+    prev() { if (this.current > 0) this.goTo(this.current - 1); }
+
+    update() {
+      this.bar.style.width = ((this.current + 1) / this.total * 100) + '%';
+      this.dots.forEach((d, i) => d.classList.toggle('active', i === this.current));
+      this.counter.innerHTML = '<span class="accent">' + String(this.current + 1).padStart(2, '0') + '</span> / ' + String(this.total).padStart(2, '0');
+    }
+
+    fadeHints() {
+      clearTimeout(this.hintTimer);
+      this.hints.classList.add('faded');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => new SlideEngine());
+})();
+</script>
+
+</body>
+</html>
