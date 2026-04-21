@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>Background Exports Pipeline &middot; A Walkthrough from the Audit Team</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital,wght@0,400;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============ THEME: Signal Room, midnight & teal (dark only) ============
+   Deep navy ground with a warm teal that reads as "live" — broadcast,
+   signal, transmission. Instrument Serif display provides an editorial
+   contrast to Inter body and JetBrains Mono code. Distinct from the
+   Wine & Ink, Graphite-Orange, and other decks in the collection. */
+:root {
+  --font-display: 'Instrument Serif', 'Fraunces', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+  --bg: #0b1220;
+  --bg-2: #0f1a2d;
+  --surface: #152236;
+  --surface-2: #1c2d44;
+  --surface-3: #223753;
+  --border: rgba(200, 220, 255, 0.09);
+  --border-bright: rgba(200, 220, 255, 0.22);
+
+  --text: #eaf1ff;
+  --text-soft: #c2cfe5;
+  --text-dim: #8091ab;
+  --text-faint: #556578;
+
+  --accent: #38d6c1;
+  --accent-bright: #6af0db;
+  --accent-soft: rgba(56, 214, 193, 0.12);
+  --accent-wash: rgba(56, 214, 193, 0.05);
+  --accent-deep: #1e9f8e;
+
+  --good: #74d8a6;
+  --warn: #f4b86a;
+  --rose: #ff7c8a;
+  --cool: #7ab7ff;
+
+  --code-bg: #060c16;
+  --code-border: rgba(56, 214, 193, 0.18);
+  --code-text: #eaf1ff;
+  --kw: #6af0db;
+  --str: #f4cf7a;
+  --num: #f4b86a;
+  --cls: #a9d8ff;
+  --sym: #c2cfe5;
+  --com: #647389;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: dark;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+/* ============ DECK ENGINE ============
+   Opacity-only reveals. The .visible class is sticky: once a slide
+   crosses the threshold it never loses .visible, so rapid Back/Forward
+   arrow navigation cannot catch an element mid-transform and strand it
+   shifted. Every reveal hits its terminal opacity and stays there. */
+.deck {
+  height: 100dvh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.slide {
+  height: 100dvh;
+  min-height: 640px;
+  scroll-snap-align: start;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(40px, 5vh, 72px) clamp(40px, 7vw, 120px);
+  isolation: isolate;
+  opacity: 0;
+  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slide.visible { opacity: 1; }
+
+.slide::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(ellipse at 18% 82%, var(--accent-soft) 0%, transparent 55%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.9;
+}
+.slide:nth-child(even)::before {
+  background-image: radial-gradient(ellipse at 82% 18%, var(--accent-soft) 0%, transparent 55%);
+}
+.slide > * { position: relative; z-index: 1; }
+
+.reveal {
+  opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slide.visible .reveal { opacity: 1; }
+.slide.visible .reveal:nth-child(1)  { transition-delay: 0.05s; }
+.slide.visible .reveal:nth-child(2)  { transition-delay: 0.12s; }
+.slide.visible .reveal:nth-child(3)  { transition-delay: 0.19s; }
+.slide.visible .reveal:nth-child(4)  { transition-delay: 0.26s; }
+.slide.visible .reveal:nth-child(5)  { transition-delay: 0.33s; }
+.slide.visible .reveal:nth-child(6)  { transition-delay: 0.40s; }
+.slide.visible .reveal:nth-child(7)  { transition-delay: 0.47s; }
+.slide.visible .reveal:nth-child(8)  { transition-delay: 0.54s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .slide, .reveal {
+    opacity: 1 !important;
+    transition: none !important;
+  }
+}
+
+/* ============ TYPOGRAPHY ============ */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 1.1vw, 13px);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 2.4px;
+  color: var(--accent);
+  margin-bottom: clamp(14px, 2vh, 22px);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.kicker::before {
+  content: '';
+  width: 22px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.display {
+  font-family: var(--font-display);
+  font-size: clamp(56px, 10vw, 140px);
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: -1.5px;
+  color: var(--text);
+  text-wrap: balance;
+}
+.display em { font-style: italic; color: var(--accent); }
+
+.heading {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 5.8vw, 72px);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.8px;
+  color: var(--text);
+  text-wrap: balance;
+}
+.heading em { font-style: italic; color: var(--accent); }
+
+.subtitle {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(22px, 2.8vw, 32px);
+  line-height: 1.35;
+  color: var(--text-soft);
+  text-wrap: pretty;
+}
+
+.body {
+  font-size: clamp(14px, 1.4vw, 18px);
+  line-height: 1.6;
+  color: var(--text-soft);
+  text-wrap: pretty;
+}
+.body strong { color: var(--text); font-weight: 600; }
+.body code { font-family: var(--font-mono); font-size: 0.9em; color: var(--accent-bright); background: var(--accent-wash); padding: 1px 7px; border-radius: 3px; }
+
+/* ============ TITLE SLIDE ============ */
+.slide--title {
+  justify-content: center;
+  align-items: flex-start;
+  padding: clamp(60px, 9vh, 120px) clamp(48px, 9vw, 140px);
+}
+.slide--title .display { max-width: 18ch; }
+.slide--title .sub {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(24px, 3.2vw, 36px);
+  color: var(--text-soft);
+  margin-top: clamp(22px, 3vh, 34px);
+  max-width: 38ch;
+  line-height: 1.3;
+}
+.slide--title .stamp {
+  position: absolute;
+  bottom: clamp(36px, 5vh, 60px);
+  left: clamp(48px, 9vw, 140px);
+  right: clamp(48px, 9vw, 140px);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  letter-spacing: 0.4px;
+}
+.slide--title .stamp span.accent { color: var(--accent); }
+
+.badge {
+  position: absolute;
+  top: clamp(30px, 4.5vh, 52px);
+  right: clamp(30px, 4vw, 56px);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  z-index: 2;
+}
+.badge__label {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(18px, 2vw, 24px);
+  color: var(--accent);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Decorative signal pulse in the title corner */
+.signal-mark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 160px;
+  height: 160px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+}
+
+/* ============ LAYOUTS ============ */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: clamp(32px, 5vw, 72px);
+  align-items: start;
+  width: 100%;
+}
+.grid-2--right { grid-template-columns: 2fr 3fr; }
+.grid-2--even  { grid-template-columns: 1fr 1fr; }
+
+.bullets {
+  list-style: none;
+  margin-top: clamp(20px, 3vh, 28px);
+  display: grid;
+  gap: clamp(10px, 1.4vh, 16px);
+}
+.bullets li {
+  padding: 10px 0 10px 22px;
+  position: relative;
+  font-size: clamp(14px, 1.4vw, 18px);
+  line-height: 1.55;
+  color: var(--text-soft);
+  border-top: 1px solid var(--border);
+}
+.bullets li:first-child { border-top: none; padding-top: 4px; }
+.bullets li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.bullets li:first-child::before { top: 12px; }
+.bullets li strong { color: var(--text); font-weight: 600; }
+.bullets li code { font-family: var(--font-mono); font-size: 0.9em; color: var(--accent-bright); }
+
+/* ============ CARDS ============ */
+.cards-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  margin-top: clamp(24px, 4vh, 40px);
+}
+.cards-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  margin-top: clamp(24px, 4vh, 40px);
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: clamp(20px, 2.5vh, 28px) clamp(18px, 2vw, 24px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.card--cool  { border-top-color: var(--cool); }
+.card--warn  { border-top-color: var(--warn); }
+.card--rose  { border-top-color: var(--rose); }
+.card__num {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.card--cool .card__num { color: var(--cool); }
+.card--warn .card__num { color: var(--warn); }
+.card--rose .card__num { color: var(--rose); }
+.card__title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2.6vw, 34px);
+  line-height: 1.12;
+  color: var(--text);
+  margin-bottom: 12px;
+  text-wrap: balance;
+}
+.card__body {
+  font-size: clamp(13px, 1.25vw, 15.5px);
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+.card__body strong { color: var(--text); }
+.card__body code { font-family: var(--font-mono); font-size: 0.88em; color: var(--accent-bright); background: var(--accent-wash); padding: 1px 6px; border-radius: 3px; }
+
+/* ============ CODE FRAMES ============ */
+.code-frame {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.code-frame__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  background: rgba(56, 214, 193, 0.05);
+  border-bottom: 1px solid var(--code-border);
+}
+.code-frame__file {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--accent-bright);
+  letter-spacing: 0.3px;
+}
+.code-frame__lang {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-faint);
+}
+.code-frame pre {
+  margin: 0;
+  padding: clamp(14px, 2.5vh, 22px) clamp(16px, 2.5vw, 26px);
+  overflow: auto;
+  flex: 1;
+}
+.code-frame code {
+  font-family: var(--font-mono);
+  font-size: clamp(11.5px, 1.05vw, 14px);
+  line-height: 1.6;
+  color: var(--code-text);
+  white-space: pre;
+  display: block;
+}
+.code-frame code .kw  { color: var(--kw); font-weight: 500; }
+.code-frame code .str { color: var(--str); }
+.code-frame code .num { color: var(--num); }
+.code-frame code .cls { color: var(--cls); }
+.code-frame code .sym { color: var(--sym); }
+.code-frame code .com { color: var(--com); font-style: italic; }
+
+.code-note {
+  font-size: clamp(12.5px, 1.2vw, 14.5px);
+  color: var(--text-dim);
+  margin-top: clamp(12px, 1.6vh, 18px);
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  line-height: 1.55;
+}
+.code-note::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  min-width: 3px;
+  align-self: stretch;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.code-note strong { color: var(--text); }
+
+/* ============ BEFORE / AFTER ============ */
+.ba {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 2.4vw, 32px);
+  margin-top: clamp(24px, 4vh, 36px);
+}
+.ba__col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: clamp(22px, 3vh, 36px) clamp(22px, 2.5vw, 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ba__col--before { border-left: 3px solid var(--rose); }
+.ba__col--after  { border-left: 3px solid var(--accent); }
+.ba__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+}
+.ba__col--before .ba__label { color: var(--rose); }
+.ba__col--after  .ba__label { color: var(--accent); }
+.ba__title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2.8vw, 34px);
+  line-height: 1.15;
+  color: var(--text);
+  text-wrap: balance;
+}
+.ba__body { font-size: clamp(13px, 1.3vw, 15.5px); line-height: 1.55; color: var(--text-soft); }
+.ba__body strong { color: var(--text); }
+
+/* ============ BAND ============ */
+.band {
+  margin-top: clamp(22px, 3.5vh, 34px);
+  padding: clamp(16px, 2vh, 22px) clamp(20px, 3vw, 32px);
+  background: var(--accent-wash);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  font-size: clamp(13px, 1.3vw, 16px);
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+.band strong { color: var(--text); }
+
+/* ============ FLOW ============ */
+.flow {
+  margin-top: clamp(24px, 3.5vh, 32px);
+  display: grid;
+  gap: clamp(14px, 2vh, 20px);
+}
+.flow-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.flow-step {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: clamp(14px, 2vh, 20px) clamp(14px, 1.8vw, 20px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.flow-step--cool { border-top-color: var(--cool); }
+.flow-step--warn { border-top-color: var(--warn); }
+.flow-step--ghost { border-top-color: var(--text-faint); }
+.flow-step__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.flow-step__title {
+  font-family: var(--font-display);
+  font-size: clamp(17px, 1.6vw, 20px);
+  color: var(--text);
+  font-weight: 400;
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+.flow-step__desc {
+  font-size: clamp(12px, 1.1vw, 13.5px);
+  line-height: 1.5;
+  color: var(--text-soft);
+  flex: 1;
+}
+.flow-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  color: var(--accent);
+  flex-shrink: 0;
+  opacity: 0.55;
+  font-family: var(--font-mono);
+  font-size: 18px;
+}
+
+/* ============ PIPE DIAGRAM ============ */
+.pipe {
+  margin-top: clamp(20px, 3vh, 28px);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.pipe__lane {
+  padding: clamp(20px, 2.5vh, 28px) clamp(18px, 2vw, 24px);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pipe__lane:last-child { border-right: none; }
+.pipe__zone {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  color: var(--text-dim);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.pipe__zone--hot  { color: var(--rose); }
+.pipe__zone--work { color: var(--warn); }
+.pipe__zone--live { color: var(--accent); }
+.pipe__zone__budget {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.pipe__list {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.pipe__item {
+  font-size: clamp(12.5px, 1.15vw, 14px);
+  line-height: 1.45;
+  color: var(--text-soft);
+  padding-left: 16px;
+  position: relative;
+}
+.pipe__item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.8;
+}
+.pipe__item--muted { color: var(--text-dim); }
+.pipe__item--muted::before { background: var(--text-faint); }
+.pipe__item strong { color: var(--text); font-weight: 600; }
+.pipe__item code { font-family: var(--font-mono); font-size: 0.88em; color: var(--accent-bright); }
+
+/* ============ STATUS TIMELINE ============ */
+.timeline {
+  margin-top: clamp(24px, 4vh, 36px);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  position: relative;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: calc(12.5% + 14px);
+  right: calc(12.5% + 14px);
+  height: 1px;
+  background: linear-gradient(90deg, var(--text-faint), var(--accent), var(--accent), var(--text-faint));
+  opacity: 0.5;
+}
+.timeline__node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 12px;
+  z-index: 1;
+}
+.timeline__dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--text-faint);
+  position: relative;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.timeline__dot--pending  { border-color: var(--text-faint); }
+.timeline__dot--process  { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 18%, var(--bg)); }
+.timeline__dot--complete { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, var(--bg)); }
+.timeline__dot--failed   { border-color: var(--rose); background: color-mix(in srgb, var(--rose) 16%, var(--bg)); }
+.timeline__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.timeline__cond {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  line-height: 1.5;
+}
+
+/* ============ BENEFITS GRID ============ */
+.wins {
+  margin-top: clamp(24px, 4vh, 36px);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.win {
+  background: var(--surface);
+  padding: clamp(20px, 2.6vh, 28px) clamp(20px, 2.4vw, 30px);
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.win__mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 2px;
+}
+.win__title {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.1vw, 26px);
+  line-height: 1.15;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.win__body {
+  font-size: clamp(13px, 1.2vw, 14.5px);
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+.win__body strong { color: var(--text); }
+
+/* ============ REFS ============ */
+.refs {
+  display: grid;
+  gap: 12px;
+  margin-top: clamp(24px, 4vh, 36px);
+  max-width: 880px;
+}
+.ref {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: clamp(18px, 2vw, 32px);
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  align-items: baseline;
+}
+.ref:last-child { border-bottom: 1px solid var(--border); }
+.ref__key {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--text-dim);
+}
+.ref__val {
+  font-family: var(--font-mono);
+  font-size: clamp(12px, 1.15vw, 13.5px);
+  color: var(--text);
+  word-break: break-all;
+  line-height: 1.55;
+}
+.ref__val span.note {
+  font-family: var(--font-body);
+  font-style: italic;
+  color: var(--text-dim);
+  margin-left: 8px;
+  font-size: 0.92em;
+}
+
+/* ============ NAV CHROME ============ */
+.deck-progress {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  background: var(--accent);
+  z-index: 100;
+  transition: width 0.3s ease;
+  pointer-events: none;
+}
+.deck-dots {
+  position: fixed;
+  right: clamp(14px, 2vw, 28px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  z-index: 100;
+  padding: 8px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+.deck-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  opacity: 0.3;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 0.18s ease, background 0.18s ease;
+}
+.deck-dot:hover { opacity: 0.7; }
+.deck-dot.active { opacity: 1; background: var(--accent); }
+.deck-counter {
+  position: fixed;
+  bottom: clamp(16px, 2.5vh, 28px);
+  right: clamp(18px, 2.5vw, 32px);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  z-index: 100;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--bg) 75%, transparent);
+  backdrop-filter: blur(8px);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+.deck-counter .accent { color: var(--accent); }
+.deck-hints {
+  position: fixed;
+  bottom: clamp(16px, 2.5vh, 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  opacity: 0.65;
+  z-index: 100;
+  transition: opacity 0.6s ease;
+  white-space: nowrap;
+  letter-spacing: 1px;
+}
+.deck-hints.faded { opacity: 0; pointer-events: none; }
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 1024px) {
+  .slide { padding: clamp(24px, 4vh, 48px) clamp(28px, 5vw, 60px); }
+  .grid-2, .grid-2--right, .grid-2--even { grid-template-columns: 1fr; gap: 28px; }
+  .cards-3, .cards-2 { grid-template-columns: 1fr; }
+  .ba { grid-template-columns: 1fr; }
+  .pipe { grid-template-columns: 1fr; }
+  .pipe__lane { border-right: none; border-bottom: 1px solid var(--border); }
+  .pipe__lane:last-child { border-bottom: none; }
+  .timeline { grid-template-columns: 1fr 1fr; gap: 24px 0; }
+  .timeline::before { display: none; }
+  .wins { grid-template-columns: 1fr; }
+  .flow-row { flex-direction: column; gap: 10px; }
+  .flow-arrow { transform: rotate(90deg); padding: 4px 0; }
+  .slide--title .stamp { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+@media (max-height: 720px) {
+  .display { font-size: clamp(44px, 8.5vw, 88px); }
+  .heading { font-size: clamp(28px, 4.8vw, 48px); }
+}
+@media (max-height: 560px) {
+  .signal-mark { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+<!-- 1. TITLE -->
+<section class="slide slide--title">
+  <svg class="signal-mark" viewBox="0 0 160 160" aria-hidden="true" style="color: var(--accent)">
+    <circle cx="130" cy="30" r="4" fill="currentColor"/>
+    <circle cx="130" cy="30" r="14" fill="none" stroke="currentColor" stroke-width="1" opacity="0.55"/>
+    <circle cx="130" cy="30" r="26" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35"/>
+    <circle cx="130" cy="30" r="40" fill="none" stroke="currentColor" stroke-width="1" opacity="0.2"/>
+    <line x1="40" y1="30" x2="110" y2="30" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+  </svg>
+  <div class="badge">
+    <span>Field Note</span>
+    <span class="badge__label">Audit Engineering</span>
+  </div>
+  <p class="kicker reveal">A Walkthrough, Not a Prescription</p>
+  <h1 class="display reveal">How we background our <em>exports</em>.</h1>
+  <p class="sub reveal">
+    A tour through the pieces we landed on for long-running file generation. A persisted report, a background job, a live channel back to the browser. Sharing it in case any of the shape is useful.
+  </p>
+  <div class="stamp reveal">
+    <div>Audit Engineering<br><span class="accent">Background jobs, WebSockets, S3</span></div>
+    <div style="text-align:right;">Chris Miles<br><span style="color:var(--text-dim)">Point an agent at it, or just read it</span></div>
+  </div>
+</section>
+
+<!-- 2. THE PROBLEM -->
+<section class="slide">
+  <div class="grid-2">
+    <div>
+      <p class="kicker reveal">The wall</p>
+      <h2 class="heading reveal">Thirty seconds is not a lot of seconds.</h2>
+      <p class="body reveal" style="margin-top: clamp(20px, 3vh, 28px); max-width: 52ch;">
+        Heroku routes kill any HTTP request that has not responded in thirty seconds. That is fine for page loads. It is brutal for exports. A modest CSV fits, a real one does not, and the moment the dataset grows or the user picks a wider filter, the request crosses the line.
+      </p>
+      <p class="body reveal" style="margin-top: 14px; max-width: 52ch;">
+        The symptoms are familiar. A spinner, then an error page. Sometimes a half built file. Sometimes a retry that lands on a fresher dataset and produces a different answer. The user never quite knows what they got.
+      </p>
+    </div>
+    <div class="reveal" style="margin-top: 12px;">
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; position: relative;">
+        <div style="font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1.8px; color: var(--rose); margin-bottom: 16px;">What goes wrong in-request</div>
+        <ol style="list-style: none; display: grid; gap: 14px;">
+          <li style="display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: baseline;">
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums;">01</span>
+            <span style="font-size: 14px; color: var(--text-soft); line-height: 1.5;">User clicks Export. The browser starts waiting.</span>
+          </li>
+          <li style="display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: baseline;">
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums;">02</span>
+            <span style="font-size: 14px; color: var(--text-soft); line-height: 1.5;">The web worker is pinned to that one request. No other work runs on it.</span>
+          </li>
+          <li style="display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: baseline;">
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums;">03</span>
+            <span style="font-size: 14px; color: var(--text-soft); line-height: 1.5;">Seconds pile up. Queries run, rows stream, memory climbs.</span>
+          </li>
+          <li style="display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: baseline;">
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums;">04</span>
+            <span style="font-size: 14px; color: var(--text); line-height: 1.5; font-weight: 500;">Thirty seconds. The router returns H12. No file.</span>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. THE SHAPE OF THE FIX -->
+<section class="slide">
+  <p class="kicker reveal">The move</p>
+  <h2 class="heading reveal" style="max-width: 22ch;">Separate the <em>click</em> from the <em>work</em>.</h2>
+  <p class="body reveal" style="margin-top: 18px; max-width: 68ch;">
+    The HTTP request has one job: record that the user asked, and hand them a receipt. Everything slow, every query, every render, every upload, happens somewhere else. A live channel carries the answer back when it is ready.
+  </p>
+  <div class="cards-3">
+    <div class="card reveal">
+      <div class="card__num">01 / Persist</div>
+      <div class="card__title">A Report record, the instant they click.</div>
+      <div class="card__body">A tiny row gets created and saved in milliseconds. It captures <strong>who</strong> asked, <strong>what</strong> kind of export, and a <strong>snapshot of their filters</strong>. That is the receipt.</div>
+    </div>
+    <div class="card reveal card--warn">
+      <div class="card__num">02 / Background</div>
+      <div class="card__title">A Sidekiq job runs it out of process.</div>
+      <div class="card__body">No HTTP timeout. No tied up web worker. The job queries, renders, and produces the file on its own time. It can retry when infrastructure blips.</div>
+    </div>
+    <div class="card reveal card--cool">
+      <div class="card__num">03 / Broadcast</div>
+      <div class="card__title">A WebSocket tells the browser when it's ready.</div>
+      <div class="card__body">The moment the file is attached, a Turbo Stream pushes the row update over ActionCable. The status flips. The download button appears. <strong>No refresh.</strong></div>
+    </div>
+  </div>
+  <div class="band reveal">
+    The user sees an immediate "we've got it, we'll let you know" and keeps working. The ugly work is elsewhere. When it finishes, the UI updates itself.
+  </div>
+</section>
+
+<!-- 4. THE PIPELINE -->
+<section class="slide">
+  <p class="kicker reveal">The pipeline</p>
+  <h2 class="heading reveal" style="max-width: 22ch;">Three zones. One story.</h2>
+  <div class="pipe reveal">
+    <div class="pipe__lane">
+      <div class="pipe__zone pipe__zone--hot">Web request <span class="pipe__zone__budget">&lt; 1s</span></div>
+      <ul class="pipe__list">
+        <li class="pipe__item">User clicks <strong>Export</strong>.</li>
+        <li class="pipe__item">Controller creates a <code>Report</code> row and snapshots filters.</li>
+        <li class="pipe__item">An event is emitted on the event bus after commit.</li>
+        <li class="pipe__item">Redirect with a flash: <em>"Your report is being prepared."</em></li>
+      </ul>
+    </div>
+    <div class="pipe__lane">
+      <div class="pipe__zone pipe__zone--work">Background work <span class="pipe__zone__budget">seconds to minutes</span></div>
+      <ul class="pipe__list">
+        <li class="pipe__item">Sidekiq picks up the job from the queue.</li>
+        <li class="pipe__item">A generator service builds the file. PDF, XLSX, or CSV.</li>
+        <li class="pipe__item">Active Storage attaches the bytes. S3 holds the blob.</li>
+        <li class="pipe__item">Another event fires: <code>report.completed</code>.</li>
+      </ul>
+    </div>
+    <div class="pipe__lane">
+      <div class="pipe__zone pipe__zone--live">Live update <span class="pipe__zone__budget">instant</span></div>
+      <ul class="pipe__list">
+        <li class="pipe__item">A broadcast handler catches the event.</li>
+        <li class="pipe__item">Turbo Stream replaces the table row over ActionCable.</li>
+        <li class="pipe__item">Status flips to <strong>Completed</strong>, Download appears.</li>
+        <li class="pipe__item">User never reloaded the page.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="band reveal">
+    Each zone has its own budget. The web request answers fast. The job takes as long as it needs. The live channel delivers the punchline.
+  </div>
+</section>
+
+<!-- 5. THE REPORT RECORD -->
+<section class="slide">
+  <div class="grid-2 grid-2--right">
+    <div>
+      <p class="kicker reveal">The receipt</p>
+      <h2 class="heading reveal">One row holds the whole story.</h2>
+      <p class="body reveal" style="margin-top: 18px; max-width: 50ch;">
+        The <code>Report</code> model is small, deliberate, and does all the heavy lifting. It is the durable identity of an export, the thing the job works on, the thing the view subscribes to, the thing the user downloads.
+      </p>
+      <ul class="bullets reveal">
+        <li><strong>user, kind, name</strong>. Who asked, what flavor, how it is labeled.</li>
+        <li><strong>filters</strong>. A JSONB snapshot of the state at request time, so the result never drifts from what was asked.</li>
+        <li><strong>processing_at, completed_at, failed_at</strong>. Three timestamps carry the whole lifecycle. Status is derived, never stored.</li>
+        <li><strong>has_one_attached :file</strong>. Active Storage owns the blob. The record owns the metadata.</li>
+      </ul>
+    </div>
+    <div class="reveal" style="margin-top: 12px;">
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: clamp(24px, 3vh, 32px) clamp(22px, 2.4vw, 30px);">
+        <div style="font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1.8px; color: var(--accent); margin-bottom: 20px;">Why snapshot the filters?</div>
+        <p style="font-size: 15px; line-height: 1.6; color: var(--text-soft); margin-bottom: 14px;">
+          A report requested today should return today's answer, even if a coworker edits a default filter tomorrow, or a coder is reassigned next week.
+        </p>
+        <p style="font-size: 15px; line-height: 1.6; color: var(--text-soft); margin-bottom: 14px;">
+          Because the filter payload is captured on the record, the job is deterministic: same inputs, same output. The report is also <strong style="color: var(--text)">regenerable</strong> on demand if anything goes wrong.
+        </p>
+        <p style="font-size: 15px; line-height: 1.6; color: var(--text-dim); font-style: italic; font-family: var(--font-display); font-size: 18px;">
+          The record is the contract.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. STATUS TIMELINE -->
+<section class="slide">
+  <p class="kicker reveal">Lifecycle</p>
+  <h2 class="heading reveal" style="max-width: 22ch;">Four states, derived from timestamps.</h2>
+  <p class="body reveal" style="margin-top: 16px; max-width: 68ch;">
+    No state column, no enum to keep in sync. The presence or absence of three timestamps tells the whole story, and the UI pill reads them the same way the job writes them.
+  </p>
+  <div class="timeline reveal">
+    <div class="timeline__node">
+      <div class="timeline__dot timeline__dot--pending"></div>
+      <div class="timeline__label">Pending</div>
+      <div class="timeline__cond">no timestamps set yet<br>job is enqueued</div>
+    </div>
+    <div class="timeline__node">
+      <div class="timeline__dot timeline__dot--process"></div>
+      <div class="timeline__label">Processing</div>
+      <div class="timeline__cond">processing_at set<br>worker is on it</div>
+    </div>
+    <div class="timeline__node">
+      <div class="timeline__dot timeline__dot--complete"></div>
+      <div class="timeline__label">Completed</div>
+      <div class="timeline__cond">completed_at set<br>file is attached</div>
+    </div>
+    <div class="timeline__node">
+      <div class="timeline__dot timeline__dot--failed"></div>
+      <div class="timeline__label">Failed</div>
+      <div class="timeline__cond">failed_at set<br>reason recorded</div>
+    </div>
+  </div>
+  <div class="band reveal">
+    A simple invariant keeps this honest: a report cannot be both completed and failed. Every transition writes exactly the timestamp it is allowed to.
+  </div>
+</section>
+
+<!-- 7. THE JOB -->
+<section class="slide">
+  <div class="grid-2">
+    <div>
+      <p class="kicker reveal">The background job</p>
+      <h2 class="heading reveal">Slow work, patient retries, clean failures.</h2>
+      <p class="body reveal" style="margin-top: 18px; max-width: 50ch;">
+        The job is the only place the export actually gets built. It loads the report, stamps it as processing, asks a generator service for a file, attaches the result, and emits an event. Errors are sorted into two buckets.
+      </p>
+      <ul class="bullets reveal">
+        <li><strong>Retryable</strong>. Credentials missing, remote session could not start, the render pipeline had a hiccup. Sidekiq retries with backoff.</li>
+        <li><strong>Terminal</strong>. Bad filter, missing coder, unsupported kind. The job marks the report failed and records a reason. No retries.</li>
+        <li><strong>Monadic results</strong>. Generators return a Success or a Failure. The job does not have to know which generator ran or how it works inside.</li>
+      </ul>
+    </div>
+    <div class="reveal">
+      <div class="cards-2" style="grid-template-columns: 1fr; gap: 16px; margin-top: 12px;">
+        <div class="card card--cool">
+          <div class="card__num">Isolation</div>
+          <div class="card__title">A job, not a request.</div>
+          <div class="card__body">Runs on a Sidekiq worker, not a web dyno. No HTTP timeout. A five minute render is a five minute render and nobody cares.</div>
+        </div>
+        <div class="card card--warn">
+          <div class="card__num">Containment</div>
+          <div class="card__title">Retries absorb the infrastructure.</div>
+          <div class="card__body">S3 throttle, Browserbase hiccup, transient network? The job tries again. The user never sees it. Only exhausted retries promote to a real failure.</div>
+        </div>
+        <div class="card">
+          <div class="card__num">Audit trail</div>
+          <div class="card__title">Every transition emits an event.</div>
+          <div class="card__body"><code>report.requested</code>, <code>report.completed</code>, <code>report.failed</code>, <code>report.downloaded</code>. The event log is the source of truth for who exported what, and when.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. LIVE UPDATES -->
+<section class="slide">
+  <p class="kicker reveal">Live channel</p>
+  <h2 class="heading reveal" style="max-width: 22ch;">One line on the page. No polling.</h2>
+  <div class="code-frame reveal" style="margin-top: clamp(22px, 3vh, 30px); max-width: 880px;">
+    <div class="code-frame__head">
+      <span class="code-frame__file">app/views/reports/index.html.erb</span>
+      <span class="code-frame__lang">ERB</span>
+    </div>
+    <pre><code><span class="sym">&lt;%=</span> <span class="kw">turbo_stream_from</span>(<span class="cls">Current</span>.user, <span class="str">"reports"</span>) <span class="sym">%&gt;</span></code></pre>
+  </div>
+  <p class="body reveal" style="margin-top: clamp(18px, 2.5vh, 24px); max-width: 68ch;">
+    That single line subscribes the browser to a channel scoped to the current user. When the job finishes and emits <code>report.completed</code>, a broadcast handler renders the updated row partial and pushes it over ActionCable with <code>broadcast_replace_to</code>. Turbo Streams swaps the <code>&lt;tr&gt;</code> in place.
+  </p>
+  <div class="code-note reveal">
+    <div>
+      <strong>Status flips without a refresh.</strong> The pill changes from Processing to Completed, the Download button fades in, the timestamp updates. The user does not have to poll, reload, or navigate. They could be on another tab and come back to a finished report already sitting there.
+    </div>
+  </div>
+</section>
+
+<!-- 9. STORAGE & RETENTION -->
+<section class="slide">
+  <div class="grid-2 grid-2--even">
+    <div>
+      <p class="kicker reveal">Storage</p>
+      <h2 class="heading reveal">Files live on S3, not on the dyno.</h2>
+      <p class="body reveal" style="margin-top: 18px; max-width: 48ch;">
+        Active Storage handles the upload. The bytes go to a private S3 bucket, the Report keeps a foreign key to the blob, and the controller hands the user a short lived, presigned download URL.
+      </p>
+      <ul class="bullets reveal">
+        <li><strong>Private by default</strong>. Nothing is public. Downloads are gated by policy and pundit scope.</li>
+        <li><strong>Short lived URLs</strong>. One minute. Long enough to click, short enough to be uncopyable.</li>
+        <li><strong>Decoupled from the web tier</strong>. A browser downloads from S3, not through the Rails server. The dyno stays free.</li>
+      </ul>
+    </div>
+    <div class="reveal" style="margin-top: 12px;">
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: clamp(24px, 3vh, 32px) clamp(22px, 2.4vw, 30px); display: flex; flex-direction: column; gap: 18px;">
+        <div>
+          <div style="font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1.8px; color: var(--accent); margin-bottom: 10px;">Retention</div>
+          <div style="font-family: var(--font-display); font-size: clamp(28px, 3.2vw, 40px); line-height: 1.1; color: var(--text); margin-bottom: 10px;">Ninety day lifespan.</div>
+          <p style="font-size: 14.5px; line-height: 1.55; color: var(--text-soft);">
+            A nightly cleanup job destroys reports older than the retention window. Active Storage automatically purges the attached blob when the record is destroyed, so S3 stays tidy and costs stay predictable.
+          </p>
+        </div>
+        <div style="border-top: 1px solid var(--border); padding-top: 18px;">
+          <div style="font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1.8px; color: var(--accent); margin-bottom: 10px;">Configurable</div>
+          <p style="font-size: 14.5px; line-height: 1.55; color: var(--text-soft);">
+            The window is driven by an env var, so retention can be tightened or loosened per environment without a deploy.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10. THE REPORTS TAB -->
+<section class="slide">
+  <p class="kicker reveal">User surface</p>
+  <h2 class="heading reveal" style="max-width: 22ch;">Every export, on one page. <em>Forever.</em></h2>
+  <p class="body reveal" style="margin-top: 18px; max-width: 68ch;">
+    Users never have to re-run an export to get it back. A dedicated <strong>Reports</strong> tab shows every report they have ever requested, live status pills, filter summaries for context, and a Download button the moment a report is ready.
+  </p>
+  <div class="ba">
+    <div class="ba__col ba__col--before reveal">
+      <div class="ba__label">Without a Reports tab</div>
+      <div class="ba__title">Run it, or lose it.</div>
+      <div class="ba__body">
+        If the user closes the tab, they start over. If support gets a "can you pull that again?" ticket, an engineer reruns the query. The export is ephemeral. Every download is a fresh five minute wait.
+      </div>
+    </div>
+    <div class="ba__col ba__col--after reveal">
+      <div class="ba__label">With a Reports tab</div>
+      <div class="ba__title">History with a download button.</div>
+      <div class="ba__body">
+        Past exports are right there, sorted by recency. Completed reports are one click away for the life of the retention window. Failures are labeled with a reason so the user knows to try again, not "why is this broken?"
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11. WHY IT WINS -->
+<section class="slide">
+  <p class="kicker reveal">Why it wins</p>
+  <h2 class="heading reveal" style="max-width: 22ch;">Six benefits, one architecture.</h2>
+  <div class="wins reveal">
+    <div class="win">
+      <span class="win__mark">&check;</span>
+      <div>
+        <div class="win__title">No more timeouts</div>
+        <div class="win__body">The HTTP response is a receipt. The work that used to hit the wall at thirty seconds now runs on a worker with no wall.</div>
+      </div>
+    </div>
+    <div class="win">
+      <span class="win__mark">&check;</span>
+      <div>
+        <div class="win__title">Users keep working</div>
+        <div class="win__body">They click, they get a confirmation, they go do something else. The export follows them back when it is ready.</div>
+      </div>
+    </div>
+    <div class="win">
+      <span class="win__mark">&check;</span>
+      <div>
+        <div class="win__title">Live feedback, no polling</div>
+        <div class="win__body">A WebSocket carries status and a download link straight to the open page. No timers, no refresh buttons, no "is it done yet?"</div>
+      </div>
+    </div>
+    <div class="win">
+      <span class="win__mark">&check;</span>
+      <div>
+        <div class="win__title">Re-downloadable for ninety days</div>
+        <div class="win__body">Support tickets about "can you pull that again?" stop reaching engineering. Users self-serve from their own history.</div>
+      </div>
+    </div>
+    <div class="win">
+      <span class="win__mark">&check;</span>
+      <div>
+        <div class="win__title">Resilient by default</div>
+        <div class="win__body">A flaky S3 or a browser render hiccup gets retried by Sidekiq, not surfaced as a user-facing error. Only real failures reach the human.</div>
+      </div>
+    </div>
+    <div class="win">
+      <span class="win__mark">&check;</span>
+      <div>
+        <div class="win__title">Every export is auditable</div>
+        <div class="win__body">Events flow through one bus. Who asked, when it ran, whether it succeeded, who downloaded. The whole life of a file is logged.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 12. REFERENCES -->
+<section class="slide">
+  <p class="kicker reveal">Where to look</p>
+  <h2 class="heading reveal" style="max-width: 22ch;">The pieces, by folder.</h2>
+  <p class="body reveal" style="margin-top: 14px; max-width: 64ch; color: var(--text-dim);">
+    Nothing exotic. A model, a service, a job, a handler, a channel, a retention task. Each piece has a single responsibility and composes with the rest.
+  </p>
+  <div class="refs reveal">
+    <div class="ref">
+      <div class="ref__key">Model</div>
+      <div class="ref__val">app/models/report.rb <span class="note">lifecycle, file attachment, derived status</span></div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Controller</div>
+      <div class="ref__val">app/controllers/reports_controller.rb <span class="note">creates the row, emits the request event, serves downloads</span></div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Job</div>
+      <div class="ref__val">app/sidekiq/report_generation_job.rb <span class="note">orchestrator with retry and failure taxonomy</span></div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Generators</div>
+      <div class="ref__val">app/services/reporting/{document_generator,pdf_generator,xlsx_generator}.rb</div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Broadcaster</div>
+      <div class="ref__val">app/services/reporting/broadcast_handler.rb <span class="note">row replace over ActionCable</span></div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Event bus</div>
+      <div class="ref__val">config/initializers/event_bus.rb <span class="note">wires events to handlers</span></div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Subscription</div>
+      <div class="ref__val">app/views/reports/index.html.erb <span class="note">turbo_stream_from on the page</span></div>
+    </div>
+    <div class="ref">
+      <div class="ref__key">Retention</div>
+      <div class="ref__val">app/sidekiq/reports/retention_cleanup_job.rb <span class="note">scheduled cleanup, cascades to S3 purge</span></div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function() {
+  class SlideEngine {
+    constructor() {
+      this.deck = document.querySelector('.deck');
+      this.slides = Array.from(document.querySelectorAll('.slide'));
+      this.current = 0;
+      this.total = this.slides.length;
+      this.buildChrome();
+      this.bindEvents();
+      this.observe();
+      this.update();
+    }
+
+    buildChrome() {
+      const bar = document.createElement('div');
+      bar.className = 'deck-progress';
+      document.body.appendChild(bar);
+      this.bar = bar;
+
+      const dots = document.createElement('div');
+      dots.className = 'deck-dots';
+      this.slides.forEach((_, i) => {
+        const d = document.createElement('button');
+        d.className = 'deck-dot';
+        d.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+        d.title = 'Slide ' + (i + 1);
+        d.onclick = () => this.goTo(i);
+        dots.appendChild(d);
+      });
+      document.body.appendChild(dots);
+      this.dots = Array.from(dots.children);
+
+      const ctr = document.createElement('div');
+      ctr.className = 'deck-counter';
+      document.body.appendChild(ctr);
+      this.counter = ctr;
+
+      const hints = document.createElement('div');
+      hints.className = 'deck-hints';
+      hints.textContent = '← →  scroll  space  esc';
+      document.body.appendChild(hints);
+      this.hints = hints;
+      this.hintTimer = setTimeout(() => hints.classList.add('faded'), 4500);
+    }
+
+    bindEvents() {
+      document.addEventListener('keydown', (e) => {
+        const t = e.target;
+        if (t && t.closest && t.closest('input, textarea, [contenteditable]')) return;
+        if (['ArrowDown', 'ArrowRight', ' ', 'PageDown'].includes(e.key)) {
+          e.preventDefault(); this.next();
+        } else if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)) {
+          e.preventDefault(); this.prev();
+        } else if (e.key === 'Home') {
+          e.preventDefault(); this.goTo(0);
+        } else if (e.key === 'End') {
+          e.preventDefault(); this.goTo(this.total - 1);
+        } else if (e.key === 'Escape') {
+          e.preventDefault(); this.goTo(0);
+        }
+        this.fadeHints();
+      });
+
+      let touchY;
+      this.deck.addEventListener('touchstart', (e) => {
+        touchY = e.touches[0].clientY;
+      }, { passive: true });
+      this.deck.addEventListener('touchend', (e) => {
+        const dy = touchY - e.changedTouches[0].clientY;
+        if (Math.abs(dy) > 55) { dy > 0 ? this.next() : this.prev(); }
+      });
+    }
+
+    observe() {
+      // Two-phase observer. Reveal is STICKY: once a slide crosses 25% of
+      // the viewport it is marked .visible and the observer stops watching
+      // it, so every reveal inside stays at terminal opacity forever.
+      // Rapid Arrow-key nav cannot leave an element mid-animation because
+      // there are no transforms and no resetting logic.
+      const revealObs = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            revealObs.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.25 });
+      this.slides.forEach((s) => revealObs.observe(s));
+
+      // Progress observer is ephemeral and separate. It only updates the
+      // dots, counter, and progress bar. It never touches .visible.
+      const progressObs = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            this.current = this.slides.indexOf(entry.target);
+            this.update();
+          }
+        });
+      }, { threshold: 0.55 });
+      this.slides.forEach((s) => progressObs.observe(s));
+    }
+
+    goTo(i) {
+      const idx = Math.max(0, Math.min(i, this.total - 1));
+      this.slides[idx].scrollIntoView({ behavior: 'smooth' });
+    }
+    next() { if (this.current < this.total - 1) this.goTo(this.current + 1); }
+    prev() { if (this.current > 0) this.goTo(this.current - 1); }
+
+    update() {
+      this.bar.style.width = ((this.current + 1) / this.total * 100) + '%';
+      this.dots.forEach((d, i) => d.classList.toggle('active', i === this.current));
+      this.counter.innerHTML = '<span class="accent">' + String(this.current + 1).padStart(2, '0') + '</span> / ' + String(this.total).padStart(2, '0');
+    }
+
+    fadeHints() {
+      clearTimeout(this.hintTimer);
+      this.hints.classList.add('faded');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => new SlideEngine());
+})();
+</script>
+
+</body>
+</html>
