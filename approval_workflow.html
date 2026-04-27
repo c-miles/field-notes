@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Approval Workflow · Game Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============ THEME: Swiss Clean ============ */
+  :root {
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'Fira Code', 'SF Mono', Consolas, monospace;
+    --bg: #ffffff;
+    --surface: #f7f7f8;
+    --surface2: #efeff1;
+    --border: rgba(0, 0, 0, 0.10);
+    --border-bright: rgba(0, 0, 0, 0.20);
+    --grid: rgba(0, 0, 0, 0.04);
+    --text: #0a0a0a;
+    --text-dim: #5a5a5a;
+    --accent: #0055ff;
+    --accent-dim: rgba(0, 85, 255, 0.08);
+    --green: #0d7a3e;
+    --green-dim: rgba(13, 122, 62, 0.08);
+    --red: #c01919;
+    --red-dim: rgba(192, 25, 25, 0.08);
+    --amber: #ad6800;
+    --amber-dim: rgba(173, 104, 0, 0.08);
+    --code-bg: #0e0e10;
+    --code-text: #e4e4e7;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a0a0c;
+      --surface: #131316;
+      --surface2: #1a1a1e;
+      --border: rgba(255, 255, 255, 0.10);
+      --border-bright: rgba(255, 255, 255, 0.20);
+      --grid: rgba(255, 255, 255, 0.04);
+      --text: #f6f6f7;
+      --text-dim: #9a9aa3;
+      --accent: #5a8cff;
+      --accent-dim: rgba(90, 140, 255, 0.10);
+      --green: #4ade80;
+      --green-dim: rgba(74, 222, 128, 0.10);
+      --red: #f87171;
+      --red-dim: rgba(248, 113, 113, 0.10);
+      --amber: #fbbf24;
+      --amber-dim: rgba(251, 191, 36, 0.10);
+      --code-bg: #050507;
+      --code-text: #e4e4e7;
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--text);
+    background: var(--bg);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ============ DECK ENGINE ============ */
+  .deck {
+    height: 100dvh;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .slide {
+    height: 100dvh;
+    scroll-snap-align: start;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px);
+    isolation: isolate;
+    background-image:
+      linear-gradient(to right, var(--grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+    background-size: clamp(60px, 8vw, 120px) clamp(60px, 8vw, 120px);
+    /* Opacity-only entrance — no transforms = no perceived layout shift */
+    opacity: 0;
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .slide.visible { opacity: 1; }
+
+  .slide .reveal {
+    opacity: 0;
+    transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .slide.visible .reveal { opacity: 1; }
+  .slide.visible .reveal:nth-child(1) { transition-delay: 0.05s; }
+  .slide.visible .reveal:nth-child(2) { transition-delay: 0.12s; }
+  .slide.visible .reveal:nth-child(3) { transition-delay: 0.19s; }
+  .slide.visible .reveal:nth-child(4) { transition-delay: 0.26s; }
+  .slide.visible .reveal:nth-child(5) { transition-delay: 0.33s; }
+  .slide.visible .reveal:nth-child(6) { transition-delay: 0.40s; }
+  .slide.visible .reveal:nth-child(7) { transition-delay: 0.47s; }
+  .slide.visible .reveal:nth-child(8) { transition-delay: 0.54s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .slide, .slide .reveal {
+      opacity: 1 !important;
+      transition: none !important;
+    }
+  }
+
+  /* ============ NAV CHROME ============ */
+  .deck-progress {
+    position: fixed; top: 0; left: 0; height: 2px;
+    background: var(--accent); z-index: 100;
+    transition: width 0.3s ease; pointer-events: none;
+  }
+
+  .deck-dots {
+    position: fixed; right: clamp(12px, 2vw, 24px); top: 50%;
+    transform: translateY(-50%); display: flex; flex-direction: column;
+    gap: 6px; z-index: 100; padding: 8px;
+    background: color-mix(in srgb, var(--bg) 70%, transparent 30%);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+
+  .deck-dot {
+    width: 6px; height: 6px;
+    background: var(--text-dim); opacity: 0.3; border: none; padding: 0;
+    cursor: pointer; transition: opacity 0.2s ease, background 0.2s ease;
+  }
+  .deck-dot:hover { opacity: 0.6; }
+  .deck-dot.active { opacity: 1; background: var(--accent); }
+
+  .deck-counter {
+    position: fixed; bottom: clamp(12px, 2vh, 24px); right: clamp(12px, 2vw, 24px);
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);
+    z-index: 100; font-variant-numeric: tabular-nums; letter-spacing: 0.05em;
+    background: var(--bg); padding: 4px 8px; border: 1px solid var(--border);
+  }
+
+  .deck-hints {
+    position: fixed; bottom: clamp(12px, 2vh, 24px); left: 50%;
+    transform: translateX(-50%); font-family: var(--font-mono);
+    font-size: 11px; color: var(--text-dim); opacity: 0.7; z-index: 100;
+    transition: opacity 0.5s ease; white-space: nowrap; letter-spacing: 0.05em;
+  }
+  .deck-hints.faded { opacity: 0; pointer-events: none; }
+
+  /* ============ TYPOGRAPHY ============ */
+  .display {
+    font-size: clamp(48px, 9vw, 110px);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    text-wrap: balance;
+  }
+  .heading {
+    font-size: clamp(28px, 5vw, 56px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+  .subheading {
+    font-size: clamp(18px, 2.4vw, 26px);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+    color: var(--text-dim);
+    text-wrap: pretty;
+  }
+  .body {
+    font-size: clamp(15px, 1.9vw, 20px);
+    line-height: 1.55;
+    color: var(--text-dim);
+    text-wrap: pretty;
+    max-width: 75ch;
+  }
+  .label {
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.1vw, 13px);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .number-mark {
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.2vw, 14px);
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 2px 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 0;
+  }
+
+  /* ============ TITLE SLIDE ============ */
+  .slide--title { justify-content: center; }
+  .slide--title .title-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(20px, 3vh, 36px);
+    max-width: 920px;
+  }
+  .slide--title .accent-bar {
+    width: 60px;
+    height: 4px;
+    background: var(--accent);
+  }
+  .slide--title .meta-row {
+    display: flex;
+    gap: clamp(20px, 3vw, 40px);
+    flex-wrap: wrap;
+    margin-top: clamp(20px, 3vh, 36px);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ============ STANDARD SLIDE ============ */
+  .standard-inner {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(20px, 3vh, 32px);
+    max-width: 1080px;
+  }
+  .suggestion-pill {
+    display: inline-block;
+    margin-left: 12px;
+    padding: 2px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+
+  /* ============ SCOPE SPLIT ============ */
+  .scope-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(20px, 3vw, 40px);
+    margin-top: clamp(20px, 3vh, 32px);
+  }
+  .scope-panel {
+    border: 1px solid var(--border);
+    padding: clamp(24px, 3vh, 36px) clamp(20px, 2.5vw, 32px);
+    background: var(--surface);
+  }
+  .scope-panel h3 {
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.2vw, 13px);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin-bottom: 16px;
+  }
+  .scope-panel.in-scope h3 { color: var(--green); }
+  .scope-panel.out-scope h3 { color: var(--red); }
+  .scope-panel ul { list-style: none; padding: 0; }
+  .scope-panel li {
+    padding: 6px 0;
+    font-size: clamp(14px, 1.7vw, 18px);
+    line-height: 1.45;
+    color: var(--text);
+  }
+  .scope-panel.out-scope li {
+    color: var(--text-dim);
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--red) 50%, transparent);
+  }
+
+  /* ============ THREE PATHS ============ */
+  .paths-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: clamp(12px, 1.6vw, 22px);
+    margin-top: clamp(20px, 3vh, 32px);
+  }
+  .path-card {
+    border: 1px solid var(--border);
+    border-top: 3px solid;
+    padding: clamp(16px, 2vh, 26px) clamp(14px, 1.6vw, 20px);
+    background: var(--surface);
+  }
+  .path-card.manual { border-top-color: var(--accent); }
+  .path-card.auto { border-top-color: var(--green); }
+  .path-card.initial { border-top-color: var(--amber); }
+  .path-card.post-add { border-top-color: var(--text-dim); }
+  .path-card .path-num {
+    font-family: var(--font-mono);
+    font-size: clamp(28px, 3.2vw, 40px);
+    font-weight: 500;
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+  .path-card.manual .path-num { color: var(--accent); }
+  .path-card.auto .path-num { color: var(--green); }
+  .path-card.initial .path-num { color: var(--amber); }
+  .path-card.post-add .path-num { color: var(--text-dim); }
+  .path-card h3 {
+    font-size: clamp(17px, 2vw, 22px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+  }
+  .path-card p {
+    font-size: clamp(13px, 1.5vw, 16px);
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .path-card .reason-tag {
+    margin-top: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .post-add-note { display: none; }
+  .post-add-note strong {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  /* ============ STATE MACHINE ============ */
+  .state-machine {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(8px, 1.2vh, 14px);
+    max-width: 800px;
+    margin-top: clamp(16px, 2vh, 24px);
+  }
+  .state-row {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: clamp(14px, 2vh, 20px) clamp(20px, 2.5vw, 32px);
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 24px;
+    align-items: center;
+    font-size: clamp(13px, 1.6vw, 17px);
+  }
+  .state-row .state-name {
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.3vw, 14px);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+  }
+  .state-row.terminal .state-name { color: var(--green); }
+  .state-row.transit .state-name { color: var(--amber); }
+  .state-row .state-desc { color: var(--text-dim); }
+  .state-row.terminal { border-left: 3px solid var(--green); }
+  .state-row.transit  { border-left: 3px solid var(--amber); }
+  .state-row.pending  { border-left: 3px solid var(--accent); }
+
+  /* ============ COMPARE TABLE (push vs pull) ============ */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: clamp(20px, 3vh, 28px);
+    font-size: clamp(13px, 1.5vw, 16px);
+  }
+  .compare-table th, .compare-table td {
+    text-align: left;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .compare-table th {
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.2vw, 13px);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    border-bottom: 2px solid var(--border-bright);
+    background: var(--surface);
+  }
+  .compare-table th.recommended {
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .compare-table .check {
+    color: var(--green);
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+  .compare-table .x {
+    color: var(--red);
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+
+  /* ============ CODE BLOCK ============ */
+  .code-block {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: clamp(20px, 2.5vh, 32px) clamp(20px, 2.5vw, 32px);
+    margin-top: clamp(16px, 2vh, 24px);
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.3vw, 14px);
+    line-height: 1.6;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    white-space: pre;
+  }
+  .code-block .ck { color: #94a3b8; font-style: italic; }
+  .code-block .kw { color: #f472b6; }
+  .code-block .id { color: #93c5fd; }
+  .code-block .lit { color: #86efac; }
+
+  /* ============ SCHEMA TABLE ============ */
+  .schema-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: clamp(16px, 2vh, 24px);
+    font-family: var(--font-mono);
+    font-size: clamp(12px, 1.4vw, 15px);
+  }
+  .schema-table th, .schema-table td {
+    text-align: left;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .schema-table th {
+    font-size: clamp(10px, 1.1vw, 12px);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    background: var(--surface);
+    border-bottom: 2px solid var(--border-bright);
+  }
+  .schema-table .col-name { color: var(--accent); font-weight: 600; }
+  .schema-table .col-type { color: var(--amber); }
+  .schema-table .col-note { color: var(--text-dim); font-family: var(--font-body); font-size: 0.95em; }
+
+  /* ============ UI MOCK ============ */
+  .ui-grid {
+    display: grid;
+    grid-template-columns: 5fr 4fr;
+    gap: clamp(20px, 3vw, 32px);
+    margin-top: clamp(16px, 2vh, 24px);
+  }
+  .ui-mock {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: clamp(16px, 2vh, 24px) clamp(16px, 2vw, 24px);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .ui-mock .mock-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  .ui-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .ui-table th, .ui-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .ui-table th {
+    background: var(--surface2);
+    font-weight: 500;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .ui-table td.score-low { color: var(--red); font-weight: 600; }
+  .ui-mock .row-action {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .detail-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: clamp(13px, 1.5vw, 15px);
+  }
+  .detail-stack .detail-row {
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .detail-stack .detail-row strong {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .ui-callout {
+    margin-top: clamp(16px, 2vh, 24px);
+    padding: clamp(14px, 1.8vh, 20px) clamp(20px, 2.5vw, 28px);
+    background: var(--accent-dim);
+    border-left: 3px solid var(--accent);
+    font-size: clamp(13px, 1.5vw, 16px);
+    line-height: 1.55;
+  }
+  .ui-callout strong { color: var(--accent); }
+
+  /* ============ OPEN QUESTIONS ============ */
+  .question-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: clamp(8px, 1vh, 12px) clamp(12px, 1.6vw, 20px);
+    margin-top: clamp(10px, 1.4vh, 18px);
+  }
+  @media (max-width: 900px) {
+    .question-list { grid-template-columns: 1fr; }
+  }
+  .question {
+    border: 1px solid var(--border);
+    padding: clamp(10px, 1.2vh, 14px) clamp(14px, 1.8vw, 20px);
+    background: var(--surface);
+  }
+  .question .q-title {
+    font-size: clamp(13px, 1.5vw, 16px);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .question .q-options {
+    font-size: clamp(11px, 1.2vw, 13px);
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .question .q-lean {
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1vw, 12px);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+  }
+  .question .q-lean::before {
+    content: "▸ leaning ";
+    color: var(--text-dim);
+  }
+
+  /* ============ MILESTONES ============ */
+  .milestone-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: clamp(8px, 1vw, 14px);
+    margin-top: clamp(10px, 1.4vh, 18px);
+  }
+  .milestone {
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    background: var(--surface);
+    padding: clamp(10px, 1.4vh, 18px) clamp(10px, 1.2vw, 16px);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .milestone .m-num {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .milestone h3 {
+    font-size: clamp(13px, 1.4vw, 16px);
+    font-weight: 700;
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }
+  .milestone ul {
+    list-style: none;
+    padding: 0;
+    font-size: clamp(11px, 1.1vw, 12.5px);
+    line-height: 1.4;
+    color: var(--text-dim);
+  }
+  .milestone li {
+    padding: 3px 0 3px 12px;
+    position: relative;
+  }
+  .milestone li::before {
+    content: "›";
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .milestone .m-est {
+    margin-top: auto;
+    padding-top: 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  @media (max-width: 1100px) {
+    .milestone-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  /* ============ REFERENCES ============ */
+  .refs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: clamp(14px, 2vw, 22px);
+    margin-top: clamp(20px, 3vh, 32px);
+  }
+  .ref {
+    border: 1px solid var(--border);
+    padding: clamp(16px, 2vh, 24px) clamp(20px, 2.5vw, 28px);
+    background: var(--surface);
+    text-decoration: none;
+    color: var(--text);
+    display: block;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .ref:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .ref .ref-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .ref .ref-name {
+    font-size: clamp(15px, 1.7vw, 18px);
+    font-weight: 700;
+  }
+  .ref .ref-desc {
+    font-size: clamp(12px, 1.3vw, 14px);
+    color: var(--text-dim);
+    margin-top: 6px;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+  .next-steps {
+    margin-top: clamp(28px, 4vh, 44px);
+    border-top: 1px solid var(--border);
+    padding-top: clamp(20px, 3vh, 32px);
+  }
+  .next-steps h3 {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+  }
+  .next-steps ol {
+    padding-left: 20px;
+    font-size: clamp(14px, 1.6vw, 17px);
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  /* ============ Smaller-viewport tuning ============ */
+  @media (max-height: 720px) {
+    .slide { padding: clamp(24px, 4vh, 50px) clamp(32px, 6vw, 80px); }
+    .state-row { padding: 10px 18px; }
+    .schema-table th, .schema-table td { padding: 8px 12px; }
+  }
+  @media (max-width: 880px) {
+    .scope-grid, .paths-grid, .ui-grid { grid-template-columns: 1fr; }
+    .state-row { grid-template-columns: 1fr; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+  <!-- 01 TITLE -->
+  <section class="slide slide--title">
+    <div class="title-grid">
+      <div class="accent-bar reveal"></div>
+      <p class="number-mark reveal">Project · 2026-04-27</p>
+      <h1 class="display reveal">Approval Workflow</h1>
+      <p class="subheading reveal">Game plan for the upstream gate that ships completed audit programs to Platform. Working synthesis, open questions, push architecture, issue breakdown.</p>
+      <div class="meta-row reveal">
+        <span>Audit Team</span>
+        <span>Capital Expense</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 PROBLEM -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">01 · The problem</p>
+      <h2 class="heading reveal">Audit results go out by hand. Nobody is tracking the trip.</h2>
+      <p class="body reveal">Today, results are reviewed manually, exported to PDF or Excel, and emailed to Klients. The system has no record of whether that has happened. Below-95% monthly programs have no quality gate before they ship. Operational drag, error risk, and zero auditability around &ldquo;is this done yet?&rdquo;</p>
+      <p class="body reveal" style="color: var(--text);">A second motivation worth naming: 5 monthly audits is sometimes too few. One bad audit can skew the aggregate score, especially for inpatient. The &ldquo;Add 5 more&rdquo; mechanic is intentional sample-size protection.</p>
+    </div>
+  </section>
+
+  <!-- 03 VISION -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">02 · The vision</p>
+      <h2 class="heading reveal">Eventually: auto-release to Klient dashboards. This project is the upstream gate.</h2>
+      <p class="body reveal">Long term, audit results land automatically in Platform-side Klient dashboards. Brad and Brian own the final approval inside Platform before Klients see anything. This project sits one step upstream: the place where Jill reviews below-95% monthlies and decides whether to add more samples or release the result for Platform to consume.</p>
+      <p class="body reveal" style="color: var(--text);">&ldquo;Approval&rdquo; in this app means <strong>make data available to Platform</strong>. It is not approval-for-reporting. The existing internal Reporting page (PDF/Excel exports) stays open as today.</p>
+    </div>
+  </section>
+
+  <!-- 04 SCOPE -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">03 · Scope</p>
+      <h2 class="heading reveal">What we are building, and what we are not.</h2>
+      <div class="scope-grid reveal">
+        <div class="scope-panel in-scope">
+          <h3>In scope</h3>
+          <ul>
+            <li>Single Monthly tab in Jill's queue</li>
+            <li>Below-95% monthlies appear for review</li>
+            <li>Detail page with problem audits only</li>
+            <li>Approve action, Add 5 More action</li>
+            <li>Internal note per program</li>
+            <li>Approvals (history) tab for resolved problem children</li>
+          </ul>
+        </div>
+        <div class="scope-panel out-scope">
+          <h3>Out of scope</h3>
+          <ul>
+            <li>Initials tab / approval flow</li>
+            <li>A new "lead auditor" role</li>
+            <li>Coder education / coaching dashboards</li>
+            <li>Program-progression dashboards</li>
+            <li>Klient or Koder facing views</li>
+            <li>APIs feeding info to Platform</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 WHO -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">04 · Audience</p>
+      <h2 class="heading reveal">Just Jill. Same Pundit policies that already exist.</h2>
+      <p class="body reveal">Permissions extend to anyone with the <code>system_admin</code> or <code>kode_auditor_manager</code> role. No new role needs to exist. Existing access policies cover it. Brad and Brian's downstream approval lives in Platform and is out of scope here.</p>
+    </div>
+  </section>
+
+  <!-- 06 THREE PATHS -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">05 · How a release happens</p>
+      <h2 class="heading reveal">Four release paths converge on the same record.</h2>
+      <p class="body reveal">Every audit program, when complete, produces a <strong>release</strong> to Platform. How it got triggered varies. The resulting record is the same shape.</p>
+      <div class="paths-grid reveal">
+        <div class="path-card manual">
+          <div class="path-num">01</div>
+          <h3>Manual approval</h3>
+          <p>Below-95% monthly. Jill clicks "Approve" in her queue.</p>
+          <div class="reason-tag">reason: manual_approval</div>
+        </div>
+        <div class="path-card auto">
+          <div class="path-num">02</div>
+          <h3>Auto above-threshold</h3>
+          <p>Monthly completes with score ≥ 95%. Skips Jill's queue entirely.</p>
+          <div class="reason-tag">reason: auto_above_threshold</div>
+        </div>
+        <div class="path-card initial">
+          <div class="path-num">03</div>
+          <h3>Auto-initial</h3>
+          <p>Initial round 1 or 2 completes (10 audits with submitted evaluations) regardless of score.</p>
+          <div class="reason-tag">reason: auto_initial</div>
+        </div>
+        <div class="path-card post-add">
+          <div class="path-num">04</div>
+          <h3>Auto post-add-more</h3>
+          <p>Jill picked "Add 5 More" earlier. New audits complete and the release fires automatically with whatever score it lands at.</p>
+          <div class="reason-tag">reason: auto_post_add_more</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 STATE MACHINE -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">06 · State machine</p>
+      <h2 class="heading reveal">A release row never goes back. Three states, terminal end.</h2>
+      <div class="state-machine reveal">
+        <div class="state-row pending">
+          <div class="state-name">pending_review</div>
+          <div class="state-desc">Below-95% monthly has completed. Row exists, awaiting Jill's decision. <code>released_at</code> is null. Note is editable.</div>
+        </div>
+        <div class="state-row transit">
+          <div class="state-name">awaiting_more_audits</div>
+          <div class="state-desc">Jill picked "Add 5 More". Target bumped 5→10. New audits in flight. Row stays alive while they complete. No second decision once chosen.</div>
+        </div>
+        <div class="state-row terminal">
+          <div class="state-name">released</div>
+          <div class="state-desc">Terminal. <code>released_at</code> set, <code>reason</code> stamped, push to Platform queued. Row appears in Approvals history if reason was manual_approval.</div>
+        </div>
+      </div>
+      <p class="body reveal" style="margin-top: 24px; font-size: 14px;">No transitions return to <code>pending_review</code>. Once Jill chooses, that's binding. Add 5 More is one-shot per monthly.</p>
+    </div>
+  </section>
+
+  <!-- 08 NAMING -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">07 · Why "Release" not "Approval" <span class="suggestion-pill">suggestion</span></p>
+      <h2 class="heading reveal">Most paths are not approvals. My read is the model name should reflect that.</h2>
+      <p class="body reveal">Manual approval of a below-95% monthly is the rare special case. Above-95% monthlies and all initials auto-release without anyone clicking "Approve". Naming the underlying model <code>AuditApproval</code> would mis-name the common case.</p>
+      <p class="body reveal" style="color: var(--text);">My suggestion: name the domain model after what it represents (data being released to Platform), not how it got there. Something like <code>AuditProgramRelease</code>. The UI vocabulary stays specific to Jill's case. Her button still says "Approve", her page still lives at <code>/audits/approvals</code>. The underlying record is honest about being broader. Open to other names.</p>
+    </div>
+  </section>
+
+  <!-- 09 SCHEMA -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">08 · Schema <span class="suggestion-pill">rough sketch</span></p>
+      <h2 class="heading reveal"><code>audit_program_releases</code> table.</h2>
+      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); color: var(--text-dim); margin-top: -4px;">Not prescriptive. This is how I see it now; column shape will firm up during M1.</p>
+      <table class="schema-table reveal">
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="col-name">audit_program_id</td><td class="col-type">references, NOT NULL</td><td class="col-note">unique index. one release per program</td></tr>
+          <tr><td class="col-name">released_by_id</td><td class="col-type">references users</td><td class="col-note">null for auto paths</td></tr>
+          <tr><td class="col-name">state</td><td class="col-type">string, NOT NULL</td><td class="col-note">pending_review · awaiting_more_audits · released</td></tr>
+          <tr><td class="col-name">released_at</td><td class="col-type">datetime</td><td class="col-note">null until state = released</td></tr>
+          <tr><td class="col-name">reason</td><td class="col-type">string</td><td class="col-note">manual_approval · auto_above_threshold · auto_initial · auto_post_add_more</td></tr>
+          <tr><td class="col-name">note</td><td class="col-type">text</td><td class="col-note">Jill's note. editable while pending or awaiting</td></tr>
+          <tr><td class="col-name">aggregate_score_snapshot</td><td class="col-type">decimal(5,2)</td><td class="col-note">captured at release time</td></tr>
+          <tr><td class="col-name">pushed_at</td><td class="col-type">datetime</td><td class="col-note">set when Platform-push succeeds</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 10 ADD 5 MORE -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">09 · The Add 5 More mechanic</p>
+      <h2 class="heading reveal">Bump the cap, sample now, fill organically.</h2>
+      <p class="body reveal">When Jill clicks Add 5 More, we bump the membership's <code>audit_target_count</code> from 5 to 10 and immediately invoke a one-shot sample/create pass for that coder + program. Whatever eligible charts already exist get audits right away. Subsequent nightly trigger runs continue filling any open slots as new charts arrive through ingestion.</p>
+      <p class="body reveal" style="color: var(--text);">Constraint: the new audits must be sampled from charts <strong>coded within the same program month</strong>. The program timeline does not extend. Unfilled slots at month-end are silently dropped. Once-per-monthly only. You cannot keep adding 5 more after that.</p>
+    </div>
+  </section>
+
+  <!-- 11 PUSH VS PULL -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">10 · Audit → Platform handoff</p>
+      <h2 class="heading reveal">Push wins on every operational criterion.</h2>
+      <p class="body reveal">Two architecturally different ways to get release data into Platform's hands: we push when we approve, or Platform pulls from us when it needs to render dashboards. Comparison:</p>
+      <table class="compare-table reveal">
+        <thead>
+          <tr>
+            <th>Criterion</th>
+            <th class="recommended">Push (recommended)</th>
+            <th>Pull</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Symmetry with current Platform→Audit traffic</td>
+            <td class="check">✓</td>
+            <td class="x">✗</td>
+          </tr>
+          <tr>
+            <td>Platform owns the write path; we don't dictate their internals</td>
+            <td class="check">✓</td>
+            <td class="x">✗</td>
+          </tr>
+          <tr>
+            <td>Resilient if either side is briefly down</td>
+            <td class="check">✓ (Sidekiq retries)</td>
+            <td class="x">✗ (runtime coupling)</td>
+          </tr>
+          <tr>
+            <td>Klient PDF/Excel exports work without Audit running</td>
+            <td class="check">✓</td>
+            <td class="x">✗</td>
+          </tr>
+          <tr>
+            <td>Audit stays single source of truth</td>
+            <td>partial (Platform copy)</td>
+            <td class="check">✓</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 12 PUSH PATTERN -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">11 · Push implementation</p>
+      <h2 class="heading reveal">EventBus → Sidekiq job → Platform endpoint.</h2>
+      <p class="body reveal">Reuses every existing Audit pattern: synchronous EventBus emit, async Sidekiq job for the HTTP call, retries with exponential backoff, Bugsnag-with-warning on retry exhaustion.</p>
+      <pre class="code-block reveal"><span class="ck"># When a release is created (manual or auto), emit on EventBus.</span>
+<span class="kw">EventBus</span>.emit(<span class="lit">"audit_program.released"</span>, {
+  audit_program_id: program.id,
+  audit_program_release_id: release.id,
+  released_at: release.released_at,
+  released_by_id: release.released_by_id,
+  reason: release.reason
+})
+
+<span class="ck"># Subscribers in config/initializers/event_bus.rb</span>
+on <span class="lit">"audit_program.released"</span>, <span class="id">EventWriter</span>, :on_event
+on <span class="lit">"audit_program.released"</span>, <span class="id">AuditProgramReleases::PlatformPushHandler</span>, :on_released
+
+<span class="ck"># Sidekiq job calls Platform with idempotent payload.</span>
+<span class="ck"># Gated by a feature switch so the push is a no-op until Platform is ready.</span>
+class <span class="id">AuditProgramReleases::SendToPlatformJob</span>
+  include <span class="id">Sidekiq::Job</span>
+  sidekiq_options retry: 5, queue: :default
+end</pre>
+      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); color: var(--text-dim);"><strong style="color: var(--text);">Platform won't be ready to consume on day one.</strong> Build the full pipeline, leave the outbound HTTP call gated by a feature switch (env var or whatever pattern matches our app's conventions). When Platform turns the switch on, no code change required on our side. TODO comments inside the client/job file to keep this discoverable.</p>
+    </div>
+  </section>
+
+  <!-- 13 PAYLOAD -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">12 · Payload shape <span class="suggestion-pill">starting point</span></p>
+      <h2 class="heading reveal">Translate to a flat-ish "release" Platform can land cleanly.</h2>
+      <p class="body reveal">Platform doesn't model <code>audit_program</code> or <code>evaluation</code> the way we do. Send a simple envelope keyed on our program id for idempotency, with the audits flattened underneath. As for <strong>how much</strong> data: open question. The shape below assumes "what our reporting page renders" is enough. Could be too thin if Platform needs full line-item detail for PDF/Excel exports, could be more than they want for dashboards. To be confirmed with the Platform team.</p>
+      <pre class="code-block reveal">{
+  <span class="kw">"release"</span>: {
+    <span class="kw">"external_program_id"</span>: <span class="lit">"ap_12345"</span>,
+    <span class="kw">"kind"</span>: <span class="lit">"monthly | initial_round_1 | initial_round_2"</span>,
+    <span class="kw">"client_id"</span>: 123,
+    <span class="kw">"coder_id"</span>: 456,
+    <span class="kw">"period"</span>: { <span class="kw">"year"</span>: 2026, <span class="kw">"month"</span>: 4 },
+    <span class="kw">"released_at"</span>: <span class="lit">"2026-04-29T..."</span>,
+    <span class="kw">"released_by"</span>: { <span class="kw">"auto"</span>: false, <span class="kw">"user_id"</span>: 789 },
+    <span class="kw">"aggregate_score"</span>: 92.5,
+    <span class="kw">"reason"</span>: <span class="lit">"manual_approval"</span>,
+    <span class="kw">"internal_note"</span>: <span class="lit">"..."</span>,
+    <span class="kw">"audits"</span>: [ <span class="ck">/* per-audit summary, expandable */</span> ]
+  }
+}</pre>
+    </div>
+  </section>
+
+  <!-- 14 UI -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">13 · The UI</p>
+      <h2 class="heading reveal">A small surface. Two pages, one hidden caveat.</h2>
+      <div class="ui-grid reveal">
+        <div class="ui-mock">
+          <div class="mock-label">Index · /audits/approvals</div>
+          <table class="ui-table">
+            <thead>
+              <tr><th>Coder</th><th>Client</th><th>Chart Type</th><th>Score</th><th>Audits</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Jane Doe</td><td>Hospital A</td><td>Outpatient</td><td class="score-low">87.5</td><td>5</td><td class="row-action">View →</td></tr>
+              <tr><td>John Smith</td><td>Hospital B</td><td>Inpatient</td><td class="score-low">91.2</td><td>10</td><td class="row-action">View →</td></tr>
+              <tr><td>Pat Roe</td><td>Hospital A</td><td>Inpatient</td><td class="score-low">94.0</td><td>5</td><td class="row-action">View →</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ui-mock">
+          <div class="mock-label">Detail page</div>
+          <div class="detail-stack">
+            <div class="detail-row"><strong>Header</strong>Client · Chart Type · Coder · encounters audited · score summary</div>
+            <div class="detail-row"><strong>Aggregate</strong>Overall + categorical (Diagnosis, Procedure, DRG, Technical)</div>
+            <div class="detail-row"><strong>Internal note</strong>Single editable text, no versioning</div>
+            <div class="detail-row"><strong>Problem audits</strong>Only audits below 95% appear here</div>
+            <div class="detail-row"><strong>Actions</strong>Approve · Add 5 More</div>
+          </div>
+        </div>
+      </div>
+      <div class="ui-callout reveal">
+        <strong>Caveat:</strong> if a coder has 5 audits and one scored 100% but the others dragged the aggregate below 95%, the 100% one is hidden on the detail page. The page surfaces what went wrong, not the full roster.
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 OPEN QUESTIONS -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">14 · Open questions</p>
+      <h2 class="heading reveal">Decisions still pending. Framed as proposals, not decrees.</h2>
+      <div class="question-list reveal">
+        <div class="question">
+          <div class="q-title">Platform appetite for push</div>
+          <div class="q-options"><strong>A.</strong> Platform adds an inbound endpoint we POST to (recommended). <strong>B.</strong> We expose API endpoints and Platform pulls. <strong>C.</strong> Hybrid (push notification, pull details).</div>
+          <div class="q-lean">A · cross-team conversation needed</div>
+        </div>
+        <div class="question">
+          <div class="q-title">Queue materialization</div>
+          <div class="q-options"><strong>A.</strong> Queue is a SQL query, release row created at approval time. <strong>B.</strong> Pre-create a pending row when the program enters eligibility, queue is <code>where(state: pending_review)</code>. <strong>B</strong> gives cleaner state transitions and lets Jill's note exist before she approves.</div>
+          <div class="q-lean">B</div>
+        </div>
+        <div class="question">
+          <div class="q-title">Payload detail level</div>
+          <div class="q-options"><strong>A.</strong> Summary equivalent to our reporting page (aggregate score, categorical scores, audit list). <strong>B.</strong> Full evaluation comparisons row-by-row. <strong>C.</strong> Summary now, separate detail endpoint later if Platform needs it.</div>
+          <div class="q-lean">C · keeps payload small, defers complexity</div>
+        </div>
+        <div class="question">
+          <div class="q-title">UI naming for the released state</div>
+          <div class="q-options"><strong>A.</strong> "Approved". <strong>B.</strong> "Released". <strong>C.</strong> "Sent to Platform". Button still says "Approve" either way. The question is what the resulting state reads as in the table.</div>
+          <div class="q-lean">A or B · low-stakes</div>
+        </div>
+        <div class="question">
+          <div class="q-title">Score math edges</div>
+          <div class="q-options">Aggregate uses non-discarded evaluations. For revisions: use the revision's score (not the discarded original). Worth confirming before snapshotting.</div>
+          <div class="q-lean">use revisions, ignore discarded</div>
+        </div>
+        <div class="question">
+          <div class="q-title">Approvals history scope</div>
+          <div class="q-options"><strong>A.</strong> Manual approvals only. <strong>B.</strong> Manual approvals + auto-post-add-more (anything that ever entered Jill's queue and got resolved). <strong>C.</strong> All releases regardless of how triggered. Argument for <strong>B</strong>: history is for "problem children that got resolved," and Add 5 More cases qualify.</div>
+          <div class="q-lean">B</div>
+        </div>
+        <div class="question">
+          <div class="q-title">Platform consumption switch (mechanism)</div>
+          <div class="q-options">The switch itself is decided (build the pipeline, gate the outbound HTTP call until Platform is ready). Open: which mechanism? <strong>A.</strong> Env var. <strong>B.</strong> Database-backed feature flag. <strong>C.</strong> Whatever the app already uses.</div>
+          <div class="q-lean">C · match existing pattern</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 16 MILESTONES -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">15 · Issue breakdown <span class="suggestion-pill">rough cut</span></p>
+      <h2 class="heading reveal">Five milestones. Rough estimate of how this could be sliced.</h2>
+      <p class="body reveal">One model per issue, one UI surface per issue, one event handler per issue. Independently shippable where possible. Dependencies noted in each card.</p>
+      <div class="milestone-grid reveal">
+        <div class="milestone">
+          <div class="m-num">M1</div>
+          <h3>Foundation</h3>
+          <ul>
+            <li>AuditProgramRelease model + migration</li>
+            <li>Program completion predicates and scopes</li>
+            <li>EventBus event names + subscriptions</li>
+            <li>Pundit policy + drawer link visibility</li>
+          </ul>
+          <div class="m-est">depends on: nothing</div>
+        </div>
+        <div class="milestone">
+          <div class="m-num">M2</div>
+          <h3>Auto-release wiring</h3>
+          <ul>
+            <li>Auto-release on monthly ≥ 95% completion</li>
+            <li>Auto-release on initial completion</li>
+            <li>Pre-create pending row for below-95% monthlies</li>
+          </ul>
+          <div class="m-est">depends on: M1</div>
+        </div>
+        <div class="milestone">
+          <div class="m-num">M3</div>
+          <h3>Add 5 More</h3>
+          <ul>
+            <li>Target-bump service (5 → 10 atomic)</li>
+            <li>Immediate one-shot sample/create pass</li>
+            <li>Auto-release on completion of new audits (post-add-more)</li>
+          </ul>
+          <div class="m-est">depends on: M1, exposed via M4</div>
+        </div>
+        <div class="milestone">
+          <div class="m-num">M4</div>
+          <h3>Approval Queue UI</h3>
+          <ul>
+            <li>Audits::ApprovalsController + routes</li>
+            <li>Index view (table)</li>
+            <li>Detail view (problem audits only)</li>
+            <li>Approve action + Add 5 More action (calls M3)</li>
+            <li>Internal note editing</li>
+            <li>Approvals history tab</li>
+          </ul>
+          <div class="m-est">depends on: M1, M3</div>
+        </div>
+        <div class="milestone">
+          <div class="m-num">M5</div>
+          <h3>Platform push</h3>
+          <ul>
+            <li>PlatformClient HTTP service</li>
+            <li>SendToPlatformJob (retry, idempotency, Bugsnag)</li>
+            <li>Feature switch. Flipped on when Platform is ready.</li>
+            <li>Manual retry surface for failed pushes</li>
+          </ul>
+          <div class="m-est">depends on: M1, Platform endpoint</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 REFERENCES -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">16 · References &amp; next steps</p>
+      <h2 class="heading reveal">Where to dig in. What we need before we start.</h2>
+      <div class="refs-grid reveal">
+        <a href="https://v0-approval-dashboard-ochre.vercel.app/" class="ref" target="_blank" rel="noopener">
+          <div class="ref-label">UI / UX prototype</div>
+          <div class="ref-name">Vercel approval dashboard</div>
+          <div class="ref-desc">v0-approval-dashboard-ochre.vercel.app</div>
+        </a>
+        <a href="https://linear.app/kodehealth/document/prd-audit-approval-queue-ebbd8b475872" class="ref" target="_blank" rel="noopener">
+          <div class="ref-label">Product spec</div>
+          <div class="ref-name">PRD: Audit Approval Queue</div>
+          <div class="ref-desc">Kiley Blake · last revised 2026-04-27</div>
+        </a>
+        <a href="https://linear.app/kodehealth/project/lead-auditor-approval-workflow-8c59ff62b181" class="ref" target="_blank" rel="noopener">
+          <div class="ref-label">Linear project</div>
+          <div class="ref-name">Approval Workflow</div>
+          <div class="ref-desc">Audit Team · Capital Expense</div>
+        </a>
+      </div>
+      <div class="next-steps reveal">
+        <h3>Before we start</h3>
+        <ol>
+          <li>Sync with Laila on this game plan, get her thoughts and pushback</li>
+          <li>Gut-check from Aaron and Scott on the architectural shape (push, AuditProgramRelease, the four trigger paths)</li>
+          <li>Resolve the open questions on slide 14</li>
+        </ol>
+        <p style="margin-top: 14px; font-size: clamp(12px, 1.3vw, 14px); color: var(--text-dim); line-height: 1.5;"><strong style="color: var(--text);">Note, not a blocker:</strong> the Platform conversation (inbound endpoint, payload detail) does not gate ticket creation. The feature switch lets us build the entire pipeline without Platform being ready. That conversation happens in parallel and informs M5 details only.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  class SlideEngine {
+    constructor() {
+      this.deck = document.querySelector('.deck');
+      this.slides = [...document.querySelectorAll('.slide')];
+      this.current = 0;
+      this.total = this.slides.length;
+      this.buildChrome();
+      this.bindEvents();
+      this.observe();
+      this.update();
+    }
+
+    buildChrome() {
+      var bar = document.createElement('div');
+      bar.className = 'deck-progress';
+      document.body.appendChild(bar);
+      this.bar = bar;
+
+      var dots = document.createElement('div');
+      dots.className = 'deck-dots';
+      var self = this;
+      this.slides.forEach(function(_, i) {
+        var d = document.createElement('button');
+        d.className = 'deck-dot';
+        d.title = 'Slide ' + (i + 1);
+        d.onclick = function() { self.goTo(i); };
+        dots.appendChild(d);
+      });
+      document.body.appendChild(dots);
+      this.dots = [].slice.call(dots.children);
+
+      var ctr = document.createElement('div');
+      ctr.className = 'deck-counter';
+      document.body.appendChild(ctr);
+      this.counter = ctr;
+
+      var hints = document.createElement('div');
+      hints.className = 'deck-hints';
+      hints.textContent = '← → or scroll to navigate';
+      document.body.appendChild(hints);
+      this.hints = hints;
+      this.hintTimer = setTimeout(function() { hints.classList.add('faded'); }, 4000);
+    }
+
+    bindEvents() {
+      var self = this;
+      document.addEventListener('keydown', function(e) {
+        if (e.target.closest('input, textarea, [contenteditable]')) return;
+        if (['ArrowDown', 'ArrowRight', ' ', 'PageDown'].includes(e.key)) {
+          e.preventDefault(); self.next();
+        } else if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)) {
+          e.preventDefault(); self.prev();
+        } else if (e.key === 'Home') {
+          e.preventDefault(); self.goTo(0);
+        } else if (e.key === 'End') {
+          e.preventDefault(); self.goTo(self.total - 1);
+        }
+        self.fadeHints();
+      });
+
+      var touchY;
+      this.deck.addEventListener('touchstart', function(e) {
+        touchY = e.touches[0].clientY;
+      }, { passive: true });
+      this.deck.addEventListener('touchend', function(e) {
+        var dy = touchY - e.changedTouches[0].clientY;
+        if (Math.abs(dy) > 50) { dy > 0 ? self.next() : self.prev(); }
+      });
+    }
+
+    observe() {
+      var self = this;
+      var obs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            self.current = self.slides.indexOf(entry.target);
+            self.update();
+          }
+        });
+      }, { threshold: 0.5 });
+      this.slides.forEach(function(s) { obs.observe(s); });
+    }
+
+    goTo(i) {
+      this.slides[Math.max(0, Math.min(i, this.total - 1))]
+        .scrollIntoView({ behavior: 'smooth' });
+    }
+
+    next() { if (this.current < this.total - 1) this.goTo(this.current + 1); }
+    prev() { if (this.current > 0) this.goTo(this.current - 1); }
+
+    update() {
+      this.bar.style.width = ((this.current + 1) / this.total * 100) + '%';
+      var self = this;
+      this.dots.forEach(function(d, i) { d.classList.toggle('active', i === self.current); });
+      this.counter.textContent = (this.current + 1) + ' / ' + this.total;
+    }
+
+    fadeHints() {
+      clearTimeout(this.hintTimer);
+      this.hints.classList.add('faded');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    new SlideEngine();
+  });
+</script>
+
+</body>
+</html>
