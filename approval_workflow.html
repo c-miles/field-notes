@@ -82,8 +82,12 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    /* Center content vertically and horizontally. The eyebrow .label is pinned
+       to a fixed top-left position via absolute positioning so it stays
+       uniform across slides regardless of content height. */
     justify-content: center;
-    padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px);
+    align-items: center;
+    padding: clamp(48px, 7vh, 96px) clamp(40px, 8vw, 120px) clamp(40px, 6vh, 80px);
     isolation: isolate;
     background-image:
       linear-gradient(to right, var(--grid) 1px, transparent 1px),
@@ -92,6 +96,20 @@
     /* Opacity-only entrance — no transforms = no perceived layout shift */
     opacity: 0;
     transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* Pin the eyebrow label to a uniform top position on every non-title slide,
+     and horizontally align it with the centered .standard-inner content block.
+     `max(...)` uses the slide's left padding when the viewport is narrower than
+     the content block's natural centering, otherwise the centered-edge math wins. */
+  .slide:not(.slide--title) > .standard-inner > .label {
+    position: absolute;
+    top: clamp(28px, 4.5vh, 56px);
+    left: max(clamp(40px, 8vw, 120px), calc(50% - 460px));
+    margin: 0;
+    z-index: 1;
+  }
+  .slide:not(.slide--title):has(> .standard-inner.wide) > .standard-inner > .label {
+    left: max(clamp(40px, 8vw, 120px), calc(50% - 600px));
   }
 
   .slide.visible { opacity: 1; }
@@ -159,21 +177,21 @@
 
   /* ============ TYPOGRAPHY ============ */
   .display {
-    font-size: clamp(48px, 9vw, 110px);
+    font-size: clamp(40px, 8vw, 96px);
     font-weight: 700;
     letter-spacing: -0.04em;
     line-height: 0.95;
     text-wrap: balance;
   }
   .heading {
-    font-size: clamp(28px, 5vw, 56px);
+    font-size: clamp(22px, 3.6vw, 44px);
     font-weight: 700;
     letter-spacing: -0.02em;
-    line-height: 1.1;
+    line-height: 1.15;
     text-wrap: balance;
   }
   .subheading {
-    font-size: clamp(18px, 2.4vw, 26px);
+    font-size: clamp(16px, 2vw, 22px);
     font-weight: 500;
     letter-spacing: -0.01em;
     line-height: 1.3;
@@ -181,20 +199,20 @@
     text-wrap: pretty;
   }
   .body {
-    font-size: clamp(15px, 1.9vw, 20px);
-    line-height: 1.55;
+    font-size: clamp(13px, 1.5vw, 17px);
+    line-height: 1.5;
     color: var(--text-dim);
     text-wrap: pretty;
-    max-width: 75ch;
+    max-width: 78ch;
   }
   .label {
     font-family: var(--font-mono);
-    font-size: clamp(10px, 1.1vw, 13px);
+    font-size: clamp(10px, 1vw, 12px);
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.18em;
     color: var(--accent);
-    margin-bottom: 16px;
+    margin-bottom: 8px;
   }
   .number-mark {
     font-family: var(--font-mono);
@@ -242,8 +260,16 @@
   .standard-inner {
     display: grid;
     grid-template-columns: 1fr;
-    gap: clamp(20px, 3vh, 32px);
-    max-width: 1080px;
+    gap: clamp(12px, 2vh, 24px);
+    /* Matches the title slide's content-block width (920px) so the visual
+       horizontal alignment is consistent across the whole deck. Slides with
+       wide tables or comparison grids opt into .wide for more horizontal room. */
+    max-width: 920px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .standard-inner.wide {
+    max-width: 1200px;
   }
   .suggestion-pill {
     display: inline-block;
@@ -307,6 +333,8 @@
     border-top: 3px solid;
     padding: clamp(16px, 2vh, 26px) clamp(14px, 1.6vw, 20px);
     background: var(--surface);
+    display: flex;
+    flex-direction: column;
   }
   .path-card.manual { border-top-color: var(--accent); }
   .path-card.auto { border-top-color: var(--green); }
@@ -335,7 +363,8 @@
     line-height: 1.5;
   }
   .path-card .reason-tag {
-    margin-top: 16px;
+    margin-top: auto;
+    padding-top: 16px;
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--text-dim);
@@ -360,18 +389,20 @@
     background: var(--surface);
     padding: clamp(14px, 2vh, 20px) clamp(20px, 2.5vw, 32px);
     display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: 24px;
+    grid-template-columns: minmax(260px, 22%) 1fr;
+    gap: clamp(20px, 2.5vw, 32px);
     align-items: center;
     font-size: clamp(13px, 1.6vw, 17px);
   }
   .state-row .state-name {
     font-family: var(--font-mono);
-    font-size: clamp(11px, 1.3vw, 14px);
+    font-size: clamp(11px, 1.2vw, 13px);
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     color: var(--accent);
+    word-break: keep-all;
+    white-space: nowrap;
   }
   .state-row.terminal .state-name { color: var(--green); }
   .state-row.transit .state-name { color: var(--amber); }
@@ -440,13 +471,13 @@
   .schema-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: clamp(16px, 2vh, 24px);
+    margin-top: clamp(8px, 1.2vh, 16px);
     font-family: var(--font-mono);
-    font-size: clamp(12px, 1.4vw, 15px);
+    font-size: clamp(11px, 1.2vw, 13.5px);
   }
   .schema-table th, .schema-table td {
     text-align: left;
-    padding: 11px 16px;
+    padding: 6px 12px;
     border-bottom: 1px solid var(--border);
     vertical-align: top;
   }
@@ -696,12 +727,32 @@
     line-height: 1.7;
     color: var(--text);
   }
+  .next-steps .step-done {
+    color: var(--text-dim);
+  }
+  .next-steps .step-done s {
+    text-decoration-color: var(--text-dim);
+    text-decoration-thickness: 1px;
+  }
+  .next-steps .step-check {
+    display: inline-block;
+    color: var(--green);
+    font-weight: 700;
+    margin-right: 6px;
+  }
 
   /* ============ Smaller-viewport tuning ============ */
-  @media (max-height: 720px) {
-    .slide { padding: clamp(24px, 4vh, 50px) clamp(32px, 6vw, 80px); }
-    .state-row { padding: 10px 18px; }
-    .schema-table th, .schema-table td { padding: 8px 12px; }
+  @media (max-height: 800px) {
+    .slide { padding: clamp(28px, 4.5vh, 56px) clamp(32px, 6vw, 80px); }
+    .state-row { padding: 8px 14px; }
+    .schema-table th, .schema-table td { padding: 5px 10px; font-size: 11.5px; }
+    .standard-inner { gap: clamp(8px, 1.4vh, 16px); }
+  }
+  @media (max-height: 680px) {
+    .slide { padding: 24px clamp(28px, 5vw, 64px); }
+    .heading { font-size: clamp(20px, 3vw, 32px); }
+    .body { font-size: clamp(12px, 1.3vw, 14px); line-height: 1.45; }
+    .schema-table th, .schema-table td { padding: 4px 8px; font-size: 11px; }
   }
   @media (max-width: 880px) {
     .scope-grid, .paths-grid, .ui-grid { grid-template-columns: 1fr; }
@@ -772,7 +823,7 @@
             <li>Coder education / coaching dashboards</li>
             <li>Program-progression dashboards</li>
             <li>Klient or Koder facing views</li>
-            <li>APIs feeding info to Platform</li>
+            <li>Platform's dashboards, exports, or PDF rendering</li>
           </ul>
         </div>
       </div>
@@ -790,7 +841,7 @@
 
   <!-- 06 THREE PATHS -->
   <section class="slide">
-    <div class="standard-inner">
+    <div class="standard-inner wide">
       <p class="label reveal">05 · How a release happens</p>
       <h2 class="heading reveal">Four release paths converge on the same record.</h2>
       <p class="body reveal">Every audit program, when complete, produces a <strong>release</strong> to Platform. How it got triggered varies. The resulting record is the same shape.</p>
@@ -827,22 +878,22 @@
   <section class="slide">
     <div class="standard-inner">
       <p class="label reveal">06 · State machine</p>
-      <h2 class="heading reveal">A release row never goes back. Three states, terminal end.</h2>
+      <h2 class="heading reveal">State derives from nullable timestamps. No string column.</h2>
       <div class="state-machine reveal">
         <div class="state-row pending">
-          <div class="state-name">pending_review</div>
-          <div class="state-desc">Below-95% monthly has completed. Row exists, awaiting Jill's decision. <code>released_at</code> is null. Note is editable.</div>
+          <div class="state-name">pending review</div>
+          <div class="state-desc">Below-95% monthly group has completed. Row exists, all transition timestamps nil. Note is editable.</div>
         </div>
         <div class="state-row transit">
-          <div class="state-name">awaiting_more_audits</div>
-          <div class="state-desc">Jill picked "Add 5 More". Target bumped 5→10. New audits in flight. Row stays alive while they complete. No second decision once chosen.</div>
+          <div class="state-name">awaiting more audits</div>
+          <div class="state-desc">Jill picked "Add 5 More". <code>awaiting_more_audits_at</code> stamped. Target bumped 5→10. New audits in flight. Row stays alive while they complete.</div>
         </div>
         <div class="state-row terminal">
           <div class="state-name">released</div>
-          <div class="state-desc">Terminal. <code>released_at</code> set, <code>reason</code> stamped, push to Platform queued. Row appears in Approvals history if reason was manual_approval.</div>
+          <div class="state-desc">Terminal. <code>released_at</code> + <code>reason</code> stamped, push event queued. <code>pushed_at</code> stamped on success.</div>
         </div>
       </div>
-      <p class="body reveal" style="margin-top: 24px; font-size: 14px;">No transitions return to <code>pending_review</code>. Once Jill chooses, that's binding. Add 5 More is one-shot per monthly.</p>
+      <p class="body reveal" style="margin-top: 16px; font-size: 13px;">Matches <code>AuditProgramMembership</code> and <code>Evaluation</code> conventions. A <code>state_timestamps_consistent</code> validation enforces ordering. Add 5 More is one-shot per group.</p>
     </div>
   </section>
 
@@ -858,42 +909,90 @@
 
   <!-- 09 SCHEMA -->
   <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">08 · Schema <span class="suggestion-pill">rough sketch</span></p>
-      <h2 class="heading reveal"><code>audit_program_releases</code> table.</h2>
-      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); color: var(--text-dim); margin-top: -4px;">Not prescriptive. This is how I see it now; column shape will firm up during M1.</p>
+    <div class="standard-inner wide">
+      <p class="label reveal">08 · Schema <span class="suggestion-pill">per group</span></p>
+      <h2 class="heading reveal">One row per group. Evaluations attach via a join.</h2>
+      <p class="body reveal" style="font-size: clamp(12px, 1.3vw, 14px); margin-top: -4px;">Group = (audit_program, coder, period_key, group_dims). Monthlies cycle, so one row per coder per month. Initials are one row per coder for the lifetime of the program (period_key = nil).</p>
       <table class="schema-table reveal">
         <thead>
-          <tr><th>Column</th><th>Type</th><th>Note</th></tr>
+          <tr><th>audit_program_releases</th><th>Type</th><th>Note</th></tr>
         </thead>
         <tbody>
-          <tr><td class="col-name">audit_program_id</td><td class="col-type">references, NOT NULL</td><td class="col-note">unique index. one release per program</td></tr>
-          <tr><td class="col-name">released_by_id</td><td class="col-type">references users</td><td class="col-note">null for auto paths</td></tr>
-          <tr><td class="col-name">state</td><td class="col-type">string, NOT NULL</td><td class="col-note">pending_review · awaiting_more_audits · released</td></tr>
-          <tr><td class="col-name">released_at</td><td class="col-type">datetime</td><td class="col-note">null until state = released</td></tr>
+          <tr><td class="col-name">audit_program_id</td><td class="col-type">references, NOT NULL</td><td class="col-note">part of composite unique index</td></tr>
+          <tr><td class="col-name">coder_id</td><td class="col-type">references, NOT NULL</td><td class="col-note">part of composite unique index</td></tr>
+          <tr><td class="col-name">period_key</td><td class="col-type">string</td><td class="col-note">"YYYY-MM" for monthlies, nil for initials</td></tr>
+          <tr><td class="col-name">group_dims</td><td class="col-type">jsonb</td><td class="col-note">e.g. <code>{team_id: 42}</code></td></tr>
+          <tr><td class="col-name">released_by_id</td><td class="col-type">references users</td><td class="col-note">nil for auto paths</td></tr>
           <tr><td class="col-name">reason</td><td class="col-type">string</td><td class="col-note">manual_approval · auto_above_threshold · auto_initial · auto_post_add_more</td></tr>
-          <tr><td class="col-name">note</td><td class="col-type">text</td><td class="col-note">Jill's note. editable while pending or awaiting</td></tr>
+          <tr><td class="col-name">awaiting_more_audits_at</td><td class="col-type">datetime</td><td class="col-note">stamped when Add 5 More fires</td></tr>
+          <tr><td class="col-name">released_at</td><td class="col-type">datetime</td><td class="col-note">stamped on release (auto or manual)</td></tr>
+          <tr><td class="col-name">pushed_at</td><td class="col-type">datetime</td><td class="col-note">stamped when Platform-push succeeds</td></tr>
           <tr><td class="col-name">aggregate_score_snapshot</td><td class="col-type">decimal(5,2)</td><td class="col-note">captured at release time</td></tr>
-          <tr><td class="col-name">pushed_at</td><td class="col-type">datetime</td><td class="col-note">set when Platform-push succeeds</td></tr>
+          <tr><td class="col-name">note</td><td class="col-type">text</td><td class="col-note">Jill's note, editable while pending</td></tr>
         </tbody>
       </table>
+      <p class="body reveal" style="margin-top: 8px; font-size: clamp(12px, 1.3vw, 14px);">Sibling table <code>audit_program_release_memberships</code> joins evaluations to releases (added_at / removed_at), pinning the at-release-time set through subsequent revisions.</p>
     </div>
   </section>
 
-  <!-- 10 ADD 5 MORE -->
+  <!-- 10 APPROVAL CONFIG -->
+  <section class="slide">
+    <div class="standard-inner wide">
+      <p class="label reveal">09 · approval_config</p>
+      <h2 class="heading reveal">Per-program JSON config drives release behavior.</h2>
+      <p class="body reveal">New nullable JSON column on <code>audit_programs</code>, mirroring the existing <code>selection_config</code> and <code>graduation_config</code> pattern. "No config = excluded from release" replaces the hardcoded "direct programs excluded" rule. Monthly / initial / direct / one-off become config differences, not code branches.</p>
+      <table class="schema-table reveal">
+        <thead>
+          <tr><th>Program kind</th><th>period</th><th>group_by</th><th>threshold</th><th>manual_review</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Monthly (platform)</td><td><code>monthly</code></td><td><code>[coder_id, team_id]</code></td><td>95.0</td><td>true</td></tr>
+          <tr><td>Initial 1 / Initial 2</td><td><code>none</code></td><td><code>[coder_id]</code></td><td>95.0</td><td>true</td></tr>
+          <tr><td>One-off</td><td colspan="4">no config (excluded, not getting released)</td></tr>
+          <tr><td>Direct programs</td><td colspan="4">no config (excluded)</td></tr>
+        </tbody>
+      </table>
+      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);"><strong style="color: var(--text);">M1 includes a backfill task</strong> alongside the migration so existing platform monthly / IR1 / IR2 programs get the right config on day one. Without it, every existing program ships excluded.</p>
+    </div>
+  </section>
+
+  <!-- 11 RELEASE IGNITION -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">09 · The Add 5 More mechanic</p>
+      <p class="label reveal">10 · How a release fires</p>
+      <h2 class="heading reveal">Two ways in, one decider, one place to land.</h2>
+      <div class="paths-grid reveal" style="grid-template-columns: 1fr 1fr;">
+        <div class="path-card auto">
+          <div class="path-num">A</div>
+          <h3>An evaluation completes</h3>
+          <p>Listen on <code>evaluation.completed</code>. Ask: does the parent group now have all its target audits evaluated? If yes, hand the group to the decider.</p>
+          <div class="reason-tag">covers monthlies + initials</div>
+        </div>
+        <div class="path-card manual">
+          <div class="path-num">B</div>
+          <h3>A month rolls over</h3>
+          <p>Daily Sidekiq cron scans for monthly groups whose period passed below cap. No rollover event exists in the codebase. Time-based scan is the only path.</p>
+          <div class="reason-tag">monthlies only</div>
+        </div>
+      </div>
+      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">The <strong style="color: var(--text);">decider</strong> is a service class (something like <code>AuditProgramReleases::ReleaseDecider</code>). Both paths call it with the same input: a candidate group. It reads <code>approval_config</code>, computes the aggregate score, and returns one of three answers: auto-release now, hold for manual review, or not eligible yet. The caller acts on that answer, stamping <code>released_at</code> directly or creating a pending row for Jill's queue.</p>
+    </div>
+  </section>
+
+  <!-- 12 ADD 5 MORE -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">11 · The Add 5 More mechanic</p>
       <h2 class="heading reveal">Bump the cap, sample now, fill organically.</h2>
-      <p class="body reveal">When Jill clicks Add 5 More, we bump the membership's <code>audit_target_count</code> from 5 to 10 and immediately invoke a one-shot sample/create pass for that coder + program. Whatever eligible charts already exist get audits right away. Subsequent nightly trigger runs continue filling any open slots as new charts arrive through ingestion.</p>
-      <p class="body reveal" style="color: var(--text);">Constraint: the new audits must be sampled from charts <strong>coded within the same program month</strong>. The program timeline does not extend. Unfilled slots at month-end are silently dropped. Once-per-monthly only. You cannot keep adding 5 more after that.</p>
+      <p class="body reveal">When Jill clicks Add 5 More, we bump the membership's <code>audit_target_count</code> from 5 to 10, stamp <code>awaiting_more_audits_at</code> on the existing release row, and immediately invoke a one-shot sample/create pass for that coder + program. Whatever eligible charts already exist get audits right away. Subsequent nightly trigger runs continue filling any open slots.</p>
+      <p class="body reveal" style="color: var(--text);">Constraint: the new audits must be sampled from charts <strong>coded within the same program month</strong>. The program timeline does not extend. Unfilled slots at month-end are silently dropped. Once-per-monthly only.</p>
     </div>
   </section>
 
   <!-- 11 PUSH VS PULL -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">10 · Audit → Platform handoff</p>
+      <p class="label reveal">12 · Audit → Platform handoff</p>
       <h2 class="heading reveal">Push wins on every operational criterion.</h2>
       <p class="body reveal">Two architecturally different ways to get release data into Platform's hands: we push when we approve, or Platform pulls from us when it needs to render dashboards. Comparison:</p>
       <table class="compare-table reveal">
@@ -938,7 +1037,7 @@
   <!-- 12 PUSH PATTERN -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">11 · Push implementation</p>
+      <p class="label reveal">13 · Push implementation</p>
       <h2 class="heading reveal">EventBus → Sidekiq job → Platform endpoint.</h2>
       <p class="body reveal">Reuses every existing Audit pattern: synchronous EventBus emit, async Sidekiq job for the HTTP call, retries with exponential backoff, Bugsnag-with-warning on retry exhaustion.</p>
       <pre class="code-block reveal"><span class="ck"># When a release is created (manual or auto), emit on EventBus.</span>
@@ -956,7 +1055,7 @@ on <span class="lit">"audit_program.released"</span>, <span class="id">AuditProg
 
 <span class="ck"># Sidekiq job calls Platform with idempotent payload.</span>
 <span class="ck"># Gated by a feature switch so the push is a no-op until Platform is ready.</span>
-class <span class="id">AuditProgramReleases::SendToPlatformJob</span>
+class <span class="id">AuditProgramReleases::DispatchJob</span>
   include <span class="id">Sidekiq::Job</span>
   sidekiq_options retry: 5, queue: :default
 end</pre>
@@ -967,7 +1066,7 @@ end</pre>
   <!-- 13 PAYLOAD -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">12 · Payload shape <span class="suggestion-pill">starting point</span></p>
+      <p class="label reveal">14 · Payload shape <span class="suggestion-pill">starting point</span></p>
       <h2 class="heading reveal">Translate to a flat-ish "release" Platform can land cleanly.</h2>
       <p class="body reveal">Platform doesn't model <code>audit_program</code> or <code>evaluation</code> the way we do. Send a simple envelope keyed on our program id for idempotency, with the audits flattened underneath. As for <strong>how much</strong> data: open question. The shape below assumes "what our reporting page renders" is enough. Could be too thin if Platform needs full line-item detail for PDF/Excel exports, could be more than they want for dashboards. To be confirmed with the Platform team.</p>
       <pre class="code-block reveal">{
@@ -990,8 +1089,8 @@ end</pre>
 
   <!-- 14 UI -->
   <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">13 · The UI</p>
+    <div class="standard-inner wide">
+      <p class="label reveal">15 · The UI</p>
       <h2 class="heading reveal">A small surface. Two pages, one hidden caveat.</h2>
       <div class="ui-grid reveal">
         <div class="ui-mock">
@@ -1026,8 +1125,8 @@ end</pre>
 
   <!-- 15 OPEN QUESTIONS -->
   <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">14 · Open questions</p>
+    <div class="standard-inner wide">
+      <p class="label reveal">16 · Open questions</p>
       <h2 class="heading reveal">Decisions still pending. Framed as proposals, not decrees.</h2>
       <div class="question-list reveal">
         <div class="question">
@@ -1036,14 +1135,9 @@ end</pre>
           <div class="q-lean">A · cross-team conversation needed</div>
         </div>
         <div class="question">
-          <div class="q-title">Queue materialization</div>
-          <div class="q-options"><strong>A.</strong> Queue is a SQL query, release row created at approval time. <strong>B.</strong> Pre-create a pending row when the program enters eligibility, queue is <code>where(state: pending_review)</code>. <strong>B</strong> gives cleaner state transitions and lets Jill's note exist before she approves.</div>
-          <div class="q-lean">B</div>
-        </div>
-        <div class="question">
           <div class="q-title">Payload detail level</div>
-          <div class="q-options"><strong>A.</strong> Summary equivalent to our reporting page (aggregate score, categorical scores, audit list). <strong>B.</strong> Full evaluation comparisons row-by-row. <strong>C.</strong> Summary now, separate detail endpoint later if Platform needs it.</div>
-          <div class="q-lean">C · keeps payload small, defers complexity</div>
+          <div class="q-options">Best guess: flattish envelope with release identifying fields, aggregate + categorical scores, and a flat audit list with evaluation summaries. Confirms with Platform later. We have all records, so we can scale up if they need full line-item comparisons.</div>
+          <div class="q-lean">flattish summary now, deepen later</div>
         </div>
         <div class="question">
           <div class="q-title">UI naming for the released state</div>
@@ -1051,14 +1145,9 @@ end</pre>
           <div class="q-lean">A or B · low-stakes</div>
         </div>
         <div class="question">
-          <div class="q-title">Score math edges</div>
-          <div class="q-options">Aggregate uses non-discarded evaluations. For revisions: use the revision's score (not the discarded original). Worth confirming before snapshotting.</div>
-          <div class="q-lean">use revisions, ignore discarded</div>
-        </div>
-        <div class="question">
-          <div class="q-title">Approvals history scope</div>
-          <div class="q-options"><strong>A.</strong> Manual approvals only. <strong>B.</strong> Manual approvals + auto-post-add-more (anything that ever entered Jill's queue and got resolved). <strong>C.</strong> All releases regardless of how triggered. Argument for <strong>B</strong>: history is for "problem children that got resolved," and Add 5 More cases qualify.</div>
-          <div class="q-lean">B</div>
+          <div class="q-title">Score math (carryover, not really open)</div>
+          <div class="q-options">Same as everywhere else in the app: aggregate over active (non-discarded) evaluations, use the latest revision's score, snapshot the result on the release row. Listed for completeness, no decision needed.</div>
+          <div class="q-lean">carry forward existing pattern</div>
         </div>
         <div class="question">
           <div class="q-title">Platform consumption switch (mechanism)</div>
@@ -1071,19 +1160,19 @@ end</pre>
 
   <!-- 16 MILESTONES -->
   <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">15 · Issue breakdown <span class="suggestion-pill">rough cut</span></p>
+    <div class="standard-inner wide">
+      <p class="label reveal">17 · Issue breakdown <span class="suggestion-pill">rough cut</span></p>
       <h2 class="heading reveal">Five milestones. Rough estimate of how this could be sliced.</h2>
-      <p class="body reveal">One model per issue, one UI surface per issue, one event handler per issue. Independently shippable where possible. Dependencies noted in each card.</p>
+      <p class="body reveal">Bullets are scope items, not 1:1 issues. Models ship with their scopes and predicates as one unit. Migrations ship with their backfills. Final issue boundaries get drawn at ticket time. Dependencies noted in each card.</p>
       <div class="milestone-grid reveal">
         <div class="milestone">
           <div class="m-num">M1</div>
           <h3>Foundation</h3>
           <ul>
-            <li>AuditProgramRelease model + migration</li>
-            <li>Program completion predicates and scopes</li>
-            <li>EventBus event names + subscriptions</li>
-            <li>Pundit policy + drawer link visibility</li>
+            <li>AuditProgramRelease + ReleaseMembership models, migrations, scopes, predicates</li>
+            <li>approval_config jsonb migration on audit_programs</li>
+            <li>Backfill task for existing platform monthlies / IR1 / IR2</li>
+            <li>EventBus events + Pundit policy</li>
           </ul>
           <div class="m-est">depends on: nothing</div>
         </div>
@@ -1091,9 +1180,11 @@ end</pre>
           <div class="m-num">M2</div>
           <h3>Auto-release wiring</h3>
           <ul>
+            <li>evaluation.completed listener + eligibility evaluator</li>
             <li>Auto-release on monthly ≥ 95% completion</li>
             <li>Auto-release on initial completion</li>
-            <li>Pre-create pending row for below-95% monthlies</li>
+            <li>Daily Sidekiq cron for the calendar edge (monthlies only)</li>
+            <li>Pre-create pending rows for below-95% monthlies</li>
           </ul>
           <div class="m-est">depends on: M1</div>
         </div>
@@ -1125,7 +1216,7 @@ end</pre>
           <h3>Platform push</h3>
           <ul>
             <li>PlatformClient HTTP service</li>
-            <li>SendToPlatformJob (retry, idempotency, Bugsnag)</li>
+            <li>DispatchJob (retry, idempotency, Bugsnag)</li>
             <li>Feature switch. Flipped on when Platform is ready.</li>
             <li>Manual retry surface for failed pushes</li>
           </ul>
@@ -1138,7 +1229,7 @@ end</pre>
   <!-- 17 REFERENCES -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">16 · References &amp; next steps</p>
+      <p class="label reveal">18 · References &amp; next steps</p>
       <h2 class="heading reveal">Where to dig in. What we need before we start.</h2>
       <div class="refs-grid reveal">
         <a href="https://v0-approval-dashboard-ochre.vercel.app/" class="ref" target="_blank" rel="noopener">
@@ -1149,7 +1240,7 @@ end</pre>
         <a href="https://linear.app/kodehealth/document/prd-audit-approval-queue-ebbd8b475872" class="ref" target="_blank" rel="noopener">
           <div class="ref-label">Product spec</div>
           <div class="ref-name">PRD: Audit Approval Queue</div>
-          <div class="ref-desc">Kiley Blake · last revised 2026-04-27</div>
+          <div class="ref-desc">Kiley Blake</div>
         </a>
         <a href="https://linear.app/kodehealth/project/lead-auditor-approval-workflow-8c59ff62b181" class="ref" target="_blank" rel="noopener">
           <div class="ref-label">Linear project</div>
@@ -1160,9 +1251,9 @@ end</pre>
       <div class="next-steps reveal">
         <h3>Before we start</h3>
         <ol>
-          <li>Sync with Laila on this game plan, get her thoughts and pushback</li>
-          <li>Gut-check from Aaron and Scott on the architectural shape (push, AuditProgramRelease, the four trigger paths)</li>
-          <li>Resolve the open questions on slide 14</li>
+          <li class="step-done"><span class="step-check" aria-hidden="true">✓</span> <s>Sync with Laila on this game plan, get her thoughts and pushback</s></li>
+          <li>Gut-check from Aaron and Scott on the architectural shape (push, AuditProgramRelease, the four trigger paths, the release decider)</li>
+          <li>Talk through the open questions on slide 16. Some are blocking, others can stay open while we build.</li>
         </ol>
         <p style="margin-top: 14px; font-size: clamp(12px, 1.3vw, 14px); color: var(--text-dim); line-height: 1.5;"><strong style="color: var(--text);">Note, not a blocker:</strong> the Platform conversation (inbound endpoint, payload detail) does not gate ticket creation. The feature switch lets us build the entire pipeline without Platform being ready. That conversation happens in parallel and informs M5 details only.</p>
       </div>
