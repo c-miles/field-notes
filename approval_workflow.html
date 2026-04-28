@@ -649,6 +649,8 @@
   .milestone li {
     padding: 3px 0 3px 12px;
     position: relative;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .milestone li::before {
     content: "›";
@@ -834,17 +836,17 @@
   <section class="slide">
     <div class="standard-inner">
       <p class="label reveal">04 · Audience</p>
-      <h2 class="heading reveal">Just Jill. Same Pundit policies that already exist.</h2>
-      <p class="body reveal">Permissions extend to anyone with the <code>system_admin</code> or <code>kode_auditor_manager</code> role. No new role needs to exist. Existing access policies cover it. Brad and Brian's downstream approval lives in Platform and is out of scope here.</p>
+      <h2 class="heading reveal">Just Jill. System admin only.</h2>
+      <p class="body reveal">Access is gated to the <code>system_admin</code> role. No new role needs to exist. The new <code>Audits::ApprovalsController</code> gets a matching Pundit policy with the standard <code>index?</code> / <code>show?</code> / <code>update?</code> methods, all gated on <code>user.system_admin?</code>. Brad and Brian's downstream approval lives in Platform and is out of scope here.</p>
     </div>
   </section>
 
   <!-- 06 THREE PATHS -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">05 · How a release happens</p>
-      <h2 class="heading reveal">Four release paths converge on the same record.</h2>
-      <p class="body reveal">Every audit program, when complete, produces a <strong>release</strong> to Platform. How it got triggered varies. The resulting record is the same shape.</p>
+      <p class="label reveal">05 · The four paths</p>
+      <h2 class="heading reveal">Four trigger paths converge on the same record.</h2>
+      <p class="body reveal">Every audit program, when complete, produces an <strong>outcome</strong> ready to be released to Platform. How it got triggered varies. The resulting record is the same shape.</p>
       <div class="paths-grid reveal">
         <div class="path-card manual">
           <div class="path-num">01</div>
@@ -890,20 +892,21 @@
         </div>
         <div class="state-row terminal">
           <div class="state-name">released</div>
-          <div class="state-desc">Terminal. <code>released_at</code> + <code>reason</code> stamped, push event queued. <code>pushed_at</code> stamped on success.</div>
+          <div class="state-desc">Terminal. <code>released_at</code> + <code>reason</code> stamped. Row visible to Platform via the pull endpoint.</div>
         </div>
       </div>
       <p class="body reveal" style="margin-top: 16px; font-size: 13px;">Matches <code>AuditProgramMembership</code> and <code>Evaluation</code> conventions. A <code>state_timestamps_consistent</code> validation enforces ordering. Add 5 More is one-shot per group.</p>
+      <p class="body reveal" style="margin-top: 6px; font-size: 13px;"><strong style="color: var(--text);">Timestamp persistence.</strong> <code>awaiting_more_audits_at</code> is <em>not</em> cleared when the outcome eventually releases. It stays as evidence the path was taken. Predicate order resolves the overlap: <code>released?</code> wins over <code>awaiting_more_audits?</code> wins over <code>pending?</code>. So a row that took Add 5 More and then released reads as <code>released?</code>, but the <code>auto_post_add_more</code> reason and the <code>awaiting_more_audits_at</code> timestamp are still on the row for the approvals history filter.</p>
     </div>
   </section>
 
   <!-- 08 NAMING -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">07 · Why "Release" not "Approval" <span class="suggestion-pill">suggestion</span></p>
-      <h2 class="heading reveal">Most paths are not approvals. My read is the model name should reflect that.</h2>
-      <p class="body reveal">Manual approval of a below-95% monthly is the rare special case. Above-95% monthlies and all initials auto-release without anyone clicking "Approve". Naming the underlying model <code>AuditApproval</code> would mis-name the common case.</p>
-      <p class="body reveal" style="color: var(--text);">My suggestion: name the domain model after what it represents (data being released to Platform), not how it got there. Something like <code>AuditProgramRelease</code>. The UI vocabulary stays specific to Jill's case. Her button still says "Approve", her page still lives at <code>/audits/approvals</code>. The underlying record is honest about being broader. Open to other names.</p>
+      <p class="label reveal">07 · Why <code>AuditProgramOutcome</code></p>
+      <h2 class="heading reveal">Name the row for what it <em>is</em>, not how it got created.</h2>
+      <p class="body reveal">Manual approval of a below-95% monthly is the rare special case. Above-95% monthlies, all initials, and post-Add-5-More flows all auto-release without anyone clicking "Approve". Naming the underlying model <code>AuditApproval</code> would mis-name three of the four paths.</p>
+      <p class="body reveal" style="color: var(--text);">An <strong>outcome</strong> is what the row represents: the result of an audit cycle for a coder + program + period. Every path produces the same shape of record. The name decouples the model from any particular handoff mechanic (push, pull, future tighter integration). UI vocabulary stays specific to Jill's case: button still says "Approve", page still lives at <code>/audits/approvals</code>. The underlying record is honest about being broader.</p>
     </div>
   </section>
 
@@ -912,46 +915,71 @@
     <div class="standard-inner wide">
       <p class="label reveal">08 · Schema <span class="suggestion-pill">per group</span></p>
       <h2 class="heading reveal">One row per group. Evaluations attach via a join.</h2>
-      <p class="body reveal" style="font-size: clamp(12px, 1.3vw, 14px); margin-top: -4px;">Group = (audit_program, coder, period_key, group_dims). Monthlies cycle, so one row per coder per month. Initials are one row per coder for the lifetime of the program (period_key = nil).</p>
+      <p class="body reveal" style="font-size: clamp(12px, 1.3vw, 14px); margin-top: -4px;">Group identity = (audit_program, coder, period_key). Unique index on those three. Monthlies cycle (one row per coder per month). Initials are one row per coder per program (period_key = nil).</p>
       <table class="schema-table reveal">
         <thead>
-          <tr><th>audit_program_releases</th><th>Type</th><th>Note</th></tr>
+          <tr><th>audit_program_outcomes</th><th>Type</th><th>Note</th></tr>
         </thead>
         <tbody>
           <tr><td class="col-name">audit_program_id</td><td class="col-type">references, NOT NULL</td><td class="col-note">part of composite unique index</td></tr>
           <tr><td class="col-name">coder_id</td><td class="col-type">references, NOT NULL</td><td class="col-note">part of composite unique index</td></tr>
           <tr><td class="col-name">period_key</td><td class="col-type">string</td><td class="col-note">"YYYY-MM" for monthlies, nil for initials</td></tr>
-          <tr><td class="col-name">group_dims</td><td class="col-type">jsonb</td><td class="col-note">e.g. <code>{team_id: 42}</code></td></tr>
+          <tr><td class="col-name">metadata</td><td class="col-type">jsonb</td><td class="col-note">informational only (e.g., team_id at release time). Not part of identity.</td></tr>
           <tr><td class="col-name">released_by_id</td><td class="col-type">references users</td><td class="col-note">nil for auto paths</td></tr>
           <tr><td class="col-name">reason</td><td class="col-type">string</td><td class="col-note">manual_approval · auto_above_threshold · auto_initial · auto_post_add_more</td></tr>
           <tr><td class="col-name">awaiting_more_audits_at</td><td class="col-type">datetime</td><td class="col-note">stamped when Add 5 More fires</td></tr>
-          <tr><td class="col-name">released_at</td><td class="col-type">datetime</td><td class="col-note">stamped on release (auto or manual)</td></tr>
-          <tr><td class="col-name">pushed_at</td><td class="col-type">datetime</td><td class="col-note">stamped when Platform-push succeeds</td></tr>
-          <tr><td class="col-name">aggregate_score_snapshot</td><td class="col-type">decimal(5,2)</td><td class="col-note">captured at release time</td></tr>
+          <tr><td class="col-name">released_at</td><td class="col-type">datetime</td><td class="col-note">stamped on release. row visible to Platform via pull endpoint</td></tr>
+          <tr><td class="col-name">aggregate_score_snapshot</td><td class="col-type">decimal(5,2)</td><td class="col-note">captured at release time via Reporting::Scores</td></tr>
           <tr><td class="col-name">note</td><td class="col-type">text</td><td class="col-note">Jill's note, editable while pending</td></tr>
         </tbody>
       </table>
-      <p class="body reveal" style="margin-top: 8px; font-size: clamp(12px, 1.3vw, 14px);">Sibling table <code>audit_program_release_memberships</code> joins evaluations to releases (added_at / removed_at), pinning the at-release-time set through subsequent revisions.</p>
+      <p class="body reveal" style="margin-top: 8px; font-size: clamp(12px, 1.3vw, 14px);">Sibling join table <code>audit_program_outcome_evaluations</code> ties evaluations to outcomes (added_at / removed_at), pinning the at-release-time set through subsequent revisions.</p>
+    </div>
+  </section>
+
+  <!-- 09 OVERLAP WITH REPORTING SUMMARY -->
+  <section class="slide">
+    <div class="standard-inner wide">
+      <p class="label reveal">09 · Overlap with the reporting summary</p>
+      <h2 class="heading reveal">We share computation. We do not share records.</h2>
+      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); margin-top: -4px;">There is real conceptual overlap with <code>Reporting::AuditProgramMembershipSummary</code>: both group evaluations, both score them, both partition audits. The instinct is "make summary a real record and let outcomes inherit from it." The code says no — different lifetimes, reifying summary breaks reporting.</p>
+      <table class="compare-table reveal">
+        <thead>
+          <tr>
+            <th></th>
+            <th>AuditProgramMembershipSummary</th>
+            <th class="recommended">AuditProgramOutcome</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Lifetime</td><td>live, re-queried every render</td><td>persisted, immutable after release</td></tr>
+          <tr><td>Score</td><td>recomputes from current evaluations</td><td>frozen at release time</td></tr>
+          <tr><td>Reacts to evaluation revisions</td><td class="check">✓ next render reflects new score</td><td class="x">✗ snapshot stays put</td></tr>
+          <tr><td>Surface</td><td>reporting page (internal)</td><td>outcome row (Platform consumes)</td></tr>
+        </tbody>
+      </table>
+      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);"><strong style="color: var(--text);">What we lean on (M2 work):</strong> lift <code>partition_audits</code> and <code>build_scores</code> from private methods onto a public surface so <code>OutcomeResolver</code> calls the same code reporting calls. Cadence dispatch (<code>AuditPrograms::ProgressBucketKey.cadence_for</code>) and <code>Reporting::Scores</code> are already public. No fork, no drift.</p>
     </div>
   </section>
 
   <!-- 10 APPROVAL CONFIG -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">09 · approval_config</p>
+      <p class="label reveal">10 · approval_config</p>
       <h2 class="heading reveal">Per-program JSON config drives release behavior.</h2>
       <p class="body reveal">New nullable JSON column on <code>audit_programs</code>, mirroring the existing <code>selection_config</code> and <code>graduation_config</code> pattern. "No config = excluded from release" replaces the hardcoded "direct programs excluded" rule. Monthly / initial / direct / one-off become config differences, not code branches.</p>
       <table class="schema-table reveal">
         <thead>
-          <tr><th>Program kind</th><th>period</th><th>group_by</th><th>threshold</th><th>manual_review</th></tr>
+          <tr><th>Program kind</th><th>period</th><th>threshold</th><th>manual_review</th><th>add_more</th></tr>
         </thead>
         <tbody>
-          <tr><td>Monthly (platform)</td><td><code>monthly</code></td><td><code>[coder_id, team_id]</code></td><td>95.0</td><td>true</td></tr>
-          <tr><td>Initial 1 / Initial 2</td><td><code>none</code></td><td><code>[coder_id]</code></td><td>95.0</td><td>true</td></tr>
+          <tr><td>Monthly (platform)</td><td><code>monthly</code></td><td>95.0</td><td>true</td><td>5</td></tr>
+          <tr><td>Initial 1 / Initial 2</td><td><code>none</code></td><td>95.0</td><td>true</td><td>5</td></tr>
           <tr><td>One-off</td><td colspan="4">no config (excluded, not getting released)</td></tr>
           <tr><td>Direct programs</td><td colspan="4">no config (excluded)</td></tr>
         </tbody>
       </table>
+      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">The <code>add_more_count</code> field makes Add 5 More per-program tunable. Default 5. If a program configures 3, the button reads "Add 3 More."</p>
       <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);"><strong style="color: var(--text);">M1 includes a backfill task</strong> alongside the migration so existing platform monthly / IR1 / IR2 programs get the right config on day one. Without it, every existing program ships excluded.</p>
     </div>
   </section>
@@ -959,130 +987,131 @@
   <!-- 11 RELEASE IGNITION -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">10 · How a release fires</p>
-      <h2 class="heading reveal">Two ways in, one decider, one place to land.</h2>
+      <p class="label reveal">11 · Trigger model</p>
+      <h2 class="heading reveal">Two ways in, one resolver, one place to land.</h2>
+      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); margin-top: -4px;">A group is eligible when <strong style="color: var(--text);">all attached audits have completed evaluations</strong> AND one of these triggers fires:</p>
       <div class="paths-grid reveal" style="grid-template-columns: 1fr 1fr;">
         <div class="path-card auto">
           <div class="path-num">A</div>
           <h3>An evaluation completes</h3>
-          <p>Listen on <code>evaluation.completed</code>. Ask: does the parent group now have all its target audits evaluated? If yes, hand the group to the decider.</p>
+          <p>Listen on <code>evaluation.completed</code>. Ask: was that the last incomplete evaluation in the group? If yes, hand the group to the resolver.</p>
           <div class="reason-tag">covers monthlies + initials</div>
         </div>
         <div class="path-card manual">
           <div class="path-num">B</div>
           <h3>A month rolls over</h3>
-          <p>Daily Sidekiq cron scans for monthly groups whose period passed below cap. No rollover event exists in the codebase. Time-based scan is the only path.</p>
+          <p>Daily Sidekiq cron scans for monthly groups whose period passed AND every attached audit has a completed evaluation. Add-5-More near month-end waits for the new audits to evaluate.</p>
           <div class="reason-tag">monthlies only</div>
         </div>
       </div>
-      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">The <strong style="color: var(--text);">decider</strong> is a service class (something like <code>AuditProgramReleases::ReleaseDecider</code>). Both paths call it with the same input: a candidate group. It reads <code>approval_config</code>, computes the aggregate score, and returns one of three answers: auto-release now, hold for manual review, or not eligible yet. The caller acts on that answer, stamping <code>released_at</code> directly or creating a pending row for Jill's queue.</p>
+      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">The <strong style="color: var(--text);">resolver</strong> is a service class (<code>AuditProgramOutcomes::OutcomeResolver</code>) that reuses <code>Reporting::Scores</code> for aggregate computation. Both paths call it with the same input: a candidate group. Returns: auto-release now, hold for manual review, or not eligible yet.</p>
     </div>
   </section>
 
   <!-- 12 ADD 5 MORE -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">11 · The Add 5 More mechanic</p>
+      <p class="label reveal">12 · The Add 5 More mechanic</p>
       <h2 class="heading reveal">Bump the cap, sample now, fill organically.</h2>
-      <p class="body reveal">When Jill clicks Add 5 More, we bump the membership's <code>audit_target_count</code> from 5 to 10, stamp <code>awaiting_more_audits_at</code> on the existing release row, and immediately invoke a one-shot sample/create pass for that coder + program. Whatever eligible charts already exist get audits right away. Subsequent nightly trigger runs continue filling any open slots.</p>
-      <p class="body reveal" style="color: var(--text);">Constraint: the new audits must be sampled from charts <strong>coded within the same program month</strong>. The program timeline does not extend. Unfilled slots at month-end are silently dropped. Once-per-monthly only.</p>
+      <p class="body reveal">When Jill clicks Add 5 More, we read <code>approval_config.add_more_count</code> (default 5), bump the membership's <code>audit_target_count</code> by that amount, stamp <code>awaiting_more_audits_at</code> on the existing outcome row, and immediately invoke a one-shot sample/create pass for that coder + program + period. Whatever eligible charts already exist get audits right away. Subsequent nightly trigger runs continue filling any open slots.</p>
+      <p class="body reveal" style="color: var(--text);">Period scoping matters: a stale row from February clicked in May must sample charts <strong>coded in February</strong>. The trigger pipeline currently hardcodes <code>Time.current</code>, so M3 threads an <code>at:</code> parameter through. Per-program tunable via <code>add_more_count</code>. Once-per-group only.</p>
     </div>
   </section>
 
-  <!-- 11 PUSH VS PULL -->
+  <!-- 12 PULL HANDOFF -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">12 · Audit → Platform handoff</p>
-      <h2 class="heading reveal">Push wins on every operational criterion.</h2>
-      <p class="body reveal">Two architecturally different ways to get release data into Platform's hands: we push when we approve, or Platform pulls from us when it needs to render dashboards. Comparison:</p>
+      <p class="label reveal">13 · Audit ← Platform handoff <span class="suggestion-pill">team chose pull</span></p>
+      <h2 class="heading reveal">Platform queries us when they need data. We expose, they consume.</h2>
+      <p class="body reveal">Original lean was push. After the Aaron and Scott review the team chose <strong>pull</strong>. Trade-offs we accepted:</p>
       <table class="compare-table reveal">
         <thead>
           <tr>
             <th>Criterion</th>
-            <th class="recommended">Push (recommended)</th>
-            <th>Pull</th>
+            <th class="recommended">Pull (chosen)</th>
+            <th>Push</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Symmetry with current Platform→Audit traffic</td>
+            <td>Platform owns when to consume (poll, on-render, batch)</td>
             <td class="check">✓</td>
             <td class="x">✗</td>
           </tr>
           <tr>
-            <td>Platform owns the write path; we don't dictate their internals</td>
+            <td>No outbound HTTP infrastructure on our side</td>
+            <td class="check">✓ (just expose endpoint)</td>
+            <td class="x">✗ (job, retries, Bugsnag)</td>
+          </tr>
+          <tr>
+            <td>No feature switch needed</td>
             <td class="check">✓</td>
             <td class="x">✗</td>
           </tr>
           <tr>
-            <td>Resilient if either side is briefly down</td>
-            <td class="check">✓ (Sidekiq retries)</td>
-            <td class="x">✗ (runtime coupling)</td>
+            <td>Inherently idempotent</td>
+            <td class="check">✓ (it's a GET)</td>
+            <td>requires payload-key idempotency</td>
           </tr>
           <tr>
-            <td>Klient PDF/Excel exports work without Audit running</td>
-            <td class="check">✓</td>
-            <td class="x">✗</td>
-          </tr>
-          <tr>
-            <td>Audit stays single source of truth</td>
-            <td>partial (Platform copy)</td>
-            <td class="check">✓</td>
+            <td>Resilient if Audit is briefly down</td>
+            <td class="x">✗ (Platform dashboard degrades)</td>
+            <td class="check">✓ (push on recovery)</td>
           </tr>
         </tbody>
       </table>
+      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">The runtime-coupling tradeoff is mitigated by Platform-side caching and a "no data yet" fallback UI.</p>
     </div>
   </section>
 
-  <!-- 12 PUSH PATTERN -->
+  <!-- 13 PULL ENDPOINT -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">13 · Push implementation</p>
-      <h2 class="heading reveal">EventBus → Sidekiq job → Platform endpoint.</h2>
-      <p class="body reveal">Reuses every existing Audit pattern: synchronous EventBus emit, async Sidekiq job for the HTTP call, retries with exponential backoff, Bugsnag-with-warning on retry exhaustion.</p>
-      <pre class="code-block reveal"><span class="ck"># When a release is created (manual or auto), emit on EventBus.</span>
-<span class="kw">EventBus</span>.emit(<span class="lit">"audit_program.released"</span>, {
-  audit_program_id: program.id,
-  audit_program_release_id: release.id,
-  released_at: release.released_at,
-  released_by_id: release.released_by_id,
-  reason: release.reason
-})
+      <p class="label reveal">14 · Pull endpoint</p>
+      <h2 class="heading reveal">A read-only JSON endpoint Platform queries.</h2>
+      <p class="body reveal">Mirrors existing Audit API conventions (<code>/api/v1/</code>, <code>X-API-Key</code> auth). No outbound HTTP, no Sidekiq job, no feature switch.</p>
+      <pre class="code-block reveal"><span class="ck"># GET /api/v1/audit_program_outcomes</span>
+<span class="kw">GET</span> /api/v1/audit_program_outcomes?
+  client_id=<span class="lit">123</span>
+  &amp;program_id=<span class="lit">789</span>
+  &amp;coder_external_id=<span class="lit">"ext_456"</span>
+  &amp;period=<span class="lit">"2026-04"</span>
+  &amp;status=<span class="lit">"released"</span>
+<span class="kw">Authorization</span>: X-API-Key &lt;token&gt;
 
-<span class="ck"># Subscribers in config/initializers/event_bus.rb</span>
-on <span class="lit">"audit_program.released"</span>, <span class="id">EventWriter</span>, :on_event
-on <span class="lit">"audit_program.released"</span>, <span class="id">AuditProgramReleases::PlatformPushHandler</span>, :on_released
-
-<span class="ck"># Sidekiq job calls Platform with idempotent payload.</span>
-<span class="ck"># Gated by a feature switch so the push is a no-op until Platform is ready.</span>
-class <span class="id">AuditProgramReleases::DispatchJob</span>
-  include <span class="id">Sidekiq::Job</span>
-  sidekiq_options retry: 5, queue: :default
-end</pre>
-      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); color: var(--text-dim);"><strong style="color: var(--text);">Platform won't be ready to consume on day one.</strong> Build the full pipeline, leave the outbound HTTP call gated by a feature switch (env var or whatever pattern matches our app's conventions). When Platform turns the switch on, no code change required on our side. TODO comments inside the client/job file to keep this discoverable.</p>
+<span class="ck"># Internal release event still emits for audit-trail / future use.</span>
+<span class="kw">EventBus</span>.emit(<span class="lit">"audit_program_outcome.released"</span>, {
+  audit_program_outcome_id: outcome.id,
+  audit_program_id: outcome.audit_program_id,
+  coder_id: outcome.coder_id,
+  period_key: outcome.period_key,
+  released_at: outcome.released_at,
+  reason: outcome.reason
+})</pre>
+      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); color: var(--text-dim);"><strong style="color: var(--text);">Platform doesn't have to be ready on day one.</strong> The endpoint exists and returns outcome rows the moment <code>released_at</code> is set. Platform calls when ready. No traffic until then.</p>
     </div>
   </section>
 
   <!-- 13 PAYLOAD -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">14 · Payload shape <span class="suggestion-pill">starting point</span></p>
-      <h2 class="heading reveal">Translate to a flat-ish "release" Platform can land cleanly.</h2>
-      <p class="body reveal">Platform doesn't model <code>audit_program</code> or <code>evaluation</code> the way we do. Send a simple envelope keyed on our program id for idempotency, with the audits flattened underneath. As for <strong>how much</strong> data: open question. The shape below assumes "what our reporting page renders" is enough. Could be too thin if Platform needs full line-item detail for PDF/Excel exports, could be more than they want for dashboards. To be confirmed with the Platform team.</p>
+      <p class="label reveal">15 · Response shape <span class="suggestion-pill">lean richer</span></p>
+      <h2 class="heading reveal">Top-level summary plus nested evaluation detail.</h2>
+      <p class="body reveal">Lean toward more data, not less. Platform may not need every field today, but exposing them costs us little and saves a round-trip if their dashboards or PDFs want any of it.</p>
       <pre class="code-block reveal">{
-  <span class="kw">"release"</span>: {
-    <span class="kw">"external_program_id"</span>: <span class="lit">"ap_12345"</span>,
-    <span class="kw">"kind"</span>: <span class="lit">"monthly | initial_round_1 | initial_round_2"</span>,
-    <span class="kw">"client_id"</span>: 123,
-    <span class="kw">"coder_id"</span>: 456,
-    <span class="kw">"period"</span>: { <span class="kw">"year"</span>: 2026, <span class="kw">"month"</span>: 4 },
-    <span class="kw">"released_at"</span>: <span class="lit">"2026-04-29T..."</span>,
-    <span class="kw">"released_by"</span>: { <span class="kw">"auto"</span>: false, <span class="kw">"user_id"</span>: 789 },
-    <span class="kw">"aggregate_score"</span>: 92.5,
-    <span class="kw">"reason"</span>: <span class="lit">"manual_approval"</span>,
-    <span class="kw">"internal_note"</span>: <span class="lit">"..."</span>,
-    <span class="kw">"audits"</span>: [ <span class="ck">/* per-audit summary, expandable */</span> ]
-  }
+  <span class="kw">"outcomes"</span>: [
+    {
+      <span class="kw">"id"</span>: <span class="lit">"out-123"</span>,
+      <span class="kw">"audit_program"</span>: { <span class="kw">"id"</span>: 789, <span class="kw">"name"</span>: <span class="lit">"Inpatient Monthly"</span> },
+      <span class="kw">"coder"</span>: { <span class="kw">"id"</span>: 456, <span class="kw">"external_id"</span>: <span class="lit">"ext_456"</span> },
+      <span class="kw">"period_key"</span>: <span class="lit">"2026-04"</span>,
+      <span class="kw">"scores"</span>: { <span class="kw">"overall"</span>: 94.5, <span class="kw">"diagnosis"</span>: 92.0, <span class="ck">/* ... */</span> },
+      <span class="kw">"released_at"</span>: <span class="lit">"2026-04-30T17:30:00Z"</span>,
+      <span class="kw">"reason"</span>: <span class="lit">"auto_above_threshold"</span>,
+      <span class="kw">"evaluations"</span>: [ <span class="ck">/* per-eval id, audit_id, scores, auditor, notes ... */</span> ]
+    }
+  ],
+  <span class="kw">"pagination"</span>: { <span class="kw">"total"</span>: 45, <span class="kw">"page"</span>: 1, <span class="kw">"limit"</span>: 50 }
 }</pre>
     </div>
   </section>
@@ -1090,7 +1119,7 @@ end</pre>
   <!-- 14 UI -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">15 · The UI</p>
+      <p class="label reveal">16 · The UI</p>
       <h2 class="heading reveal">A small surface. Two pages, one hidden caveat.</h2>
       <div class="ui-grid reveal">
         <div class="ui-mock">
@@ -1126,33 +1155,23 @@ end</pre>
   <!-- 15 OPEN QUESTIONS -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">16 · Open questions</p>
+      <p class="label reveal">17 · Open questions</p>
       <h2 class="heading reveal">Decisions still pending. Framed as proposals, not decrees.</h2>
       <div class="question-list reveal">
         <div class="question">
-          <div class="q-title">Platform appetite for push</div>
-          <div class="q-options"><strong>A.</strong> Platform adds an inbound endpoint we POST to (recommended). <strong>B.</strong> We expose API endpoints and Platform pulls. <strong>C.</strong> Hybrid (push notification, pull details).</div>
-          <div class="q-lean">A · cross-team conversation needed</div>
+          <div class="q-title">Response detail level</div>
+          <div class="q-options">Starting point: flattish envelope with outcome fields, scores, audit count. If Platform needs full line-item comparisons or per-audit detail, expose a sibling endpoint at <code>:id</code>. Confirm with Platform.</div>
+          <div class="q-lean">flattish now, deepen later via sibling endpoint</div>
         </div>
         <div class="question">
-          <div class="q-title">Payload detail level</div>
-          <div class="q-options">Best guess: flattish envelope with release identifying fields, aggregate + categorical scores, and a flat audit list with evaluation summaries. Confirms with Platform later. We have all records, so we can scale up if they need full line-item comparisons.</div>
-          <div class="q-lean">flattish summary now, deepen later</div>
+          <div class="q-title">Period scoping in the audit-creation pipeline</div>
+          <div class="q-options"><code>AuditTriggers::AuditCreator</code>, <code>Queries::Scope</code>, and <code>Queries::Quota</code> all hardcode <code>Time.current</code>. Add 5 More on a stale row needs an <code>at:</code> parameter threaded through three callsites. Real M3 task.</div>
+          <div class="q-lean">thread at: through the pipeline</div>
         </div>
         <div class="question">
-          <div class="q-title">UI naming for the released state</div>
-          <div class="q-options"><strong>A.</strong> "Approved". <strong>B.</strong> "Released". <strong>C.</strong> "Sent to Platform". Button still says "Approve" either way. The question is what the resulting state reads as in the table.</div>
-          <div class="q-lean">A or B · low-stakes</div>
-        </div>
-        <div class="question">
-          <div class="q-title">Score math (carryover, not really open)</div>
-          <div class="q-options">Same as everywhere else in the app: aggregate over active (non-discarded) evaluations, use the latest revision's score, snapshot the result on the release row. Listed for completeness, no decision needed.</div>
-          <div class="q-lean">carry forward existing pattern</div>
-        </div>
-        <div class="question">
-          <div class="q-title">Platform consumption switch (mechanism)</div>
-          <div class="q-options">The switch itself is decided (build the pipeline, gate the outbound HTTP call until Platform is ready). Open: which mechanism? <strong>A.</strong> Env var. <strong>B.</strong> Database-backed feature flag. <strong>C.</strong> Whatever the app already uses.</div>
-          <div class="q-lean">C · match existing pattern</div>
+          <div class="q-title">UI shape for the <code>awaiting_more_audits</code> state</div>
+          <div class="q-options">Once Jill clicks Add 5 More, the outcome enters a "waiting for new audits to land and complete" state for days. <strong>A.</strong> Tabs on the index (<code>Pending</code> / <code>Awaiting more audits</code> / <code>Released</code>) — clear separation, more clicks. <strong>B.</strong> Filters on a single index — one table, status pills, full visibility. <strong>C.</strong> Fire-and-forget — row drops off Jill's queue once Add 5 More fires and only reappears when the new audits resolve.</div>
+          <div class="q-lean">B · filters on a single index. Confirm with Kiley.</div>
         </div>
       </div>
     </div>
@@ -1161,7 +1180,7 @@ end</pre>
   <!-- 16 MILESTONES -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">17 · Issue breakdown <span class="suggestion-pill">rough cut</span></p>
+      <p class="label reveal">18 · Issue breakdown <span class="suggestion-pill">rough cut</span></p>
       <h2 class="heading reveal">Five milestones. Rough estimate of how this could be sliced.</h2>
       <p class="body reveal">Bullets are scope items, not 1:1 issues. Models ship with their scopes and predicates as one unit. Migrations ship with their backfills. Final issue boundaries get drawn at ticket time. Dependencies noted in each card.</p>
       <div class="milestone-grid reveal">
@@ -1169,8 +1188,8 @@ end</pre>
           <div class="m-num">M1</div>
           <h3>Foundation</h3>
           <ul>
-            <li>AuditProgramRelease + ReleaseMembership models, migrations, scopes, predicates</li>
-            <li>approval_config jsonb migration on audit_programs</li>
+            <li>AuditProgramOutcome + OutcomeEvaluation models, migrations, scopes, predicates</li>
+            <li>approval_config jsonb migration with add_more_count</li>
             <li>Backfill task for existing platform monthlies / IR1 / IR2</li>
             <li>EventBus events + Pundit policy</li>
           </ul>
@@ -1180,10 +1199,10 @@ end</pre>
           <div class="m-num">M2</div>
           <h3>Auto-release wiring</h3>
           <ul>
-            <li>evaluation.completed listener + eligibility evaluator</li>
-            <li>Auto-release on monthly ≥ 95% completion</li>
-            <li>Auto-release on initial completion</li>
-            <li>Daily Sidekiq cron for the calendar edge (monthlies only)</li>
+            <li>evaluation.completed listener calls OutcomeResolver</li>
+            <li>OutcomeResolver reuses Reporting::AuditProgramMembershipGrouper + Reporting::Scores</li>
+            <li>Auto-release on monthly ≥ 95% / initial completion</li>
+            <li>Daily Sidekiq cron for the calendar path (monthlies only)</li>
             <li>Pre-create pending rows for below-95% monthlies</li>
           </ul>
           <div class="m-est">depends on: M1</div>
@@ -1192,9 +1211,10 @@ end</pre>
           <div class="m-num">M3</div>
           <h3>Add 5 More</h3>
           <ul>
-            <li>Target-bump service (5 → 10 atomic)</li>
-            <li>Immediate one-shot sample/create pass</li>
-            <li>Auto-release on completion of new audits (post-add-more)</li>
+            <li>Target-bump service (reads add_more_count from config)</li>
+            <li>Period-scoped one-shot sample/create pass</li>
+            <li>Auto-release on completion of new audits (auto_post_add_more)</li>
+            <li>Split: extract shared creation pipeline out of <code>AuditTriggers::</code> first, Add 5 More on top</li>
           </ul>
           <div class="m-est">depends on: M1, exposed via M4</div>
         </div>
@@ -1213,23 +1233,48 @@ end</pre>
         </div>
         <div class="milestone">
           <div class="m-num">M5</div>
-          <h3>Platform push</h3>
+          <h3>Platform pull endpoint</h3>
           <ul>
-            <li>PlatformClient HTTP service</li>
-            <li>DispatchJob (retry, idempotency, Bugsnag)</li>
-            <li>Feature switch. Flipped on when Platform is ready.</li>
-            <li>Manual retry surface for failed pushes</li>
+            <li>Api::V1::AuditProgramOutcomesController</li>
+            <li>X-API-Key auth (existing pattern)</li>
+            <li>Filters: client, program, coder_external_id, period, status</li>
+            <li>Pagination via Pagy + Pundit policy</li>
+            <li>Sibling :id detail endpoint if Platform asks for deeper data</li>
           </ul>
-          <div class="m-est">depends on: M1, Platform endpoint</div>
+          <div class="m-est">depends on: M1</div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- 17 REFERENCES -->
+  <!-- 18 POST-M5 EXPLORATION -->
+  <section class="slide">
+    <div class="standard-inner wide">
+      <p class="label reveal">19 · Post-M5 exploration <span class="suggestion-pill">future work</span></p>
+      <h2 class="heading reveal">We own both apps. Worth prototyping tighter UI handoffs.</h2>
+      <p class="body reveal">Once the JSON endpoint is live and Platform is consuming, two patterns are worth standing up locally to see if they hold:</p>
+      <div class="paths-grid reveal" style="grid-template-columns: 1fr 1fr;">
+        <div class="path-card auto">
+          <div class="path-num">1</div>
+          <h3>Turbo frames embedded in Platform</h3>
+          <p>Platform's dashboard pages embed turbo frames that pull rendered fragments from Audit (outcome-detail panel, problem-audits list). Audit serves the fragment using its existing reporting-page styling. Auth via session sharing or signed URLs. Less duplicate UI work for Platform; consistent rendering across both apps.</p>
+          <div class="reason-tag">cheapest to prototype</div>
+        </div>
+        <div class="path-card manual">
+          <div class="path-num">2</div>
+          <h3>Web components shipped from Audit</h3>
+          <p>Reusable custom element exported from Audit, embedded in Platform. Platform passes filter params (program, coder, period). Component fetches its own data and renders. Larger upfront cost, more reusable across surfaces.</p>
+          <div class="reason-tag">bigger investment</div>
+        </div>
+      </div>
+      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">Both live outside the M1-M5 scope. We own both apps locally so a quick prototype is cheap. If the patterns prove out, they become incremental layers on top of the M5 endpoint.</p>
+    </div>
+  </section>
+
+  <!-- 19 REFERENCES -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">18 · References &amp; next steps</p>
+      <p class="label reveal">20 · References &amp; next steps</p>
       <h2 class="heading reveal">Where to dig in. What we need before we start.</h2>
       <div class="refs-grid reveal">
         <a href="https://v0-approval-dashboard-ochre.vercel.app/" class="ref" target="_blank" rel="noopener">
@@ -1252,10 +1297,10 @@ end</pre>
         <h3>Before we start</h3>
         <ol>
           <li class="step-done"><span class="step-check" aria-hidden="true">✓</span> <s>Sync with Laila on this game plan, get her thoughts and pushback</s></li>
-          <li>Gut-check from Aaron and Scott on the architectural shape (push, AuditProgramRelease, the four trigger paths, the release decider)</li>
-          <li>Talk through the open questions on slide 16. Some are blocking, others can stay open while we build.</li>
+          <li class="step-done"><span class="step-check" aria-hidden="true">✓</span> <s>Gut-check from Aaron and Scott. Outcome: pull instead of push, dual-column schema confirmed, add_more_count flexibility added, reuse of existing summary/scoring logic confirmed.</s></li>
+          <li>Talk through the open questions on slide 17. Some are blocking, others can stay open while we build.</li>
+          <li>Draft Linear issues per the M1-M5 cut.</li>
         </ol>
-        <p style="margin-top: 14px; font-size: clamp(12px, 1.3vw, 14px); color: var(--text-dim); line-height: 1.5;"><strong style="color: var(--text);">Note, not a blocker:</strong> the Platform conversation (inbound endpoint, payload detail) does not gate ticket creation. The feature switch lets us build the entire pipeline without Platform being ready. That conversation happens in parallel and informs M5 details only.</p>
       </div>
     </div>
   </section>
