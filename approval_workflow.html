@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Approval Workflow · Game Plan</title>
+<title>Approval Workflow · Engineering Plan</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
@@ -82,9 +82,6 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    /* Center content vertically and horizontally. The eyebrow .label is pinned
-       to a fixed top-left position via absolute positioning so it stays
-       uniform across slides regardless of content height. */
     justify-content: center;
     align-items: center;
     padding: clamp(48px, 7vh, 96px) clamp(40px, 8vw, 120px) clamp(40px, 6vh, 80px);
@@ -93,14 +90,9 @@
       linear-gradient(to right, var(--grid) 1px, transparent 1px),
       linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
     background-size: clamp(60px, 8vw, 120px) clamp(60px, 8vw, 120px);
-    /* Opacity-only entrance — no transforms = no perceived layout shift */
     opacity: 0;
     transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  /* Pin the eyebrow label to a uniform top position on every non-title slide,
-     and horizontally align it with the centered .standard-inner content block.
-     `max(...)` uses the slide's left padding when the viewport is narrower than
-     the content block's natural centering, otherwise the centered-edge math wins. */
   .slide:not(.slide--title) > .standard-inner > .label {
     position: absolute;
     top: clamp(28px, 4.5vh, 56px);
@@ -142,7 +134,6 @@
     background: var(--accent); z-index: 100;
     transition: width 0.3s ease; pointer-events: none;
   }
-
   .deck-dots {
     position: fixed; right: clamp(12px, 2vw, 24px); top: 50%;
     transform: translateY(-50%); display: flex; flex-direction: column;
@@ -151,7 +142,6 @@
     border: 1px solid var(--border);
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
-
   .deck-dot {
     width: 6px; height: 6px;
     background: var(--text-dim); opacity: 0.3; border: none; padding: 0;
@@ -159,14 +149,12 @@
   }
   .deck-dot:hover { opacity: 0.6; }
   .deck-dot.active { opacity: 1; background: var(--accent); }
-
   .deck-counter {
     position: fixed; bottom: clamp(12px, 2vh, 24px); right: clamp(12px, 2vw, 24px);
     font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);
     z-index: 100; font-variant-numeric: tabular-nums; letter-spacing: 0.05em;
     background: var(--bg); padding: 4px 8px; border: 1px solid var(--border);
   }
-
   .deck-hints {
     position: fixed; bottom: clamp(12px, 2vh, 24px); left: 50%;
     transform: translateX(-50%); font-family: var(--font-mono);
@@ -214,14 +202,6 @@
     color: var(--accent);
     margin-bottom: 8px;
   }
-  .number-mark {
-    font-family: var(--font-mono);
-    font-size: clamp(11px, 1.2vw, 14px);
-    font-weight: 500;
-    color: var(--text-dim);
-    letter-spacing: 0.1em;
-  }
-
   code {
     font-family: var(--font-mono);
     font-size: 0.85em;
@@ -239,21 +219,12 @@
     gap: clamp(20px, 3vh, 36px);
     max-width: 920px;
   }
-  .slide--title .accent-bar {
-    width: 60px;
-    height: 4px;
-    background: var(--accent);
-  }
+  .slide--title .accent-bar { width: 60px; height: 4px; background: var(--accent); }
   .slide--title .meta-row {
-    display: flex;
-    gap: clamp(20px, 3vw, 40px);
-    flex-wrap: wrap;
+    display: flex; gap: clamp(20px, 3vw, 40px); flex-wrap: wrap;
     margin-top: clamp(20px, 3vh, 36px);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--text-dim);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);
+    letter-spacing: 0.1em; text-transform: uppercase;
   }
 
   /* ============ STANDARD SLIDE ============ */
@@ -261,211 +232,95 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: clamp(12px, 2vh, 24px);
-    /* Matches the title slide's content-block width (920px) so the visual
-       horizontal alignment is consistent across the whole deck. Slides with
-       wide tables or comparison grids opt into .wide for more horizontal room. */
     max-width: 920px;
     width: 100%;
     margin: 0 auto;
   }
-  .standard-inner.wide {
-    max-width: 1200px;
-  }
-  .suggestion-pill {
-    display: inline-block;
-    margin-left: 12px;
-    padding: 2px 10px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--accent);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    vertical-align: middle;
-  }
+  .standard-inner.wide { max-width: 1200px; }
 
-  /* ============ SCOPE SPLIT ============ */
-  .scope-grid {
+  /* ============ TWO-GATE OVERVIEW ============ */
+  .gates-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: clamp(20px, 3vw, 40px);
-    margin-top: clamp(20px, 3vh, 32px);
+    margin-top: clamp(16px, 2vh, 28px);
   }
-  .scope-panel {
+  .gate-panel {
     border: 1px solid var(--border);
-    padding: clamp(24px, 3vh, 36px) clamp(20px, 2.5vw, 32px);
     background: var(--surface);
+    padding: clamp(20px, 2.5vh, 32px) clamp(20px, 2.5vw, 32px);
+    display: flex; flex-direction: column;
   }
-  .scope-panel h3 {
-    font-family: var(--font-mono);
-    font-size: clamp(11px, 1.2vw, 13px);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    margin-bottom: 16px;
+  .gate-panel.stage-1 { border-top: 3px solid var(--accent); }
+  .gate-panel.stage-2 { border-top: 3px solid var(--green); }
+  .gate-panel .gate-eyebrow {
+    font-family: var(--font-mono); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--text-dim); margin-bottom: 6px;
   }
-  .scope-panel.in-scope h3 { color: var(--green); }
-  .scope-panel.out-scope h3 { color: var(--red); }
-  .scope-panel ul { list-style: none; padding: 0; }
-  .scope-panel li {
-    padding: 6px 0;
-    font-size: clamp(14px, 1.7vw, 18px);
-    line-height: 1.45;
-    color: var(--text);
-  }
-  .scope-panel.out-scope li {
-    color: var(--text-dim);
-    text-decoration: line-through;
-    text-decoration-color: color-mix(in srgb, var(--red) 50%, transparent);
-  }
-
-  /* ============ THREE PATHS ============ */
-  .paths-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: clamp(12px, 1.6vw, 22px);
-    margin-top: clamp(20px, 3vh, 32px);
-  }
-  .path-card {
-    border: 1px solid var(--border);
-    border-top: 3px solid;
-    padding: clamp(16px, 2vh, 26px) clamp(14px, 1.6vw, 20px);
-    background: var(--surface);
-    display: flex;
-    flex-direction: column;
-  }
-  .path-card.manual { border-top-color: var(--accent); }
-  .path-card.auto { border-top-color: var(--green); }
-  .path-card.initial { border-top-color: var(--amber); }
-  .path-card.post-add { border-top-color: var(--text-dim); }
-  .path-card .path-num {
-    font-family: var(--font-mono);
-    font-size: clamp(28px, 3.2vw, 40px);
-    font-weight: 500;
-    line-height: 1;
-    margin-bottom: 12px;
-  }
-  .path-card.manual .path-num { color: var(--accent); }
-  .path-card.auto .path-num { color: var(--green); }
-  .path-card.initial .path-num { color: var(--amber); }
-  .path-card.post-add .path-num { color: var(--text-dim); }
-  .path-card h3 {
-    font-size: clamp(17px, 2vw, 22px);
+  .gate-panel.stage-1 .gate-eyebrow { color: var(--accent); }
+  .gate-panel.stage-2 .gate-eyebrow { color: var(--green); }
+  .gate-panel h3 {
+    font-size: clamp(18px, 2.2vw, 24px);
     font-weight: 700;
     letter-spacing: -0.01em;
     margin-bottom: 10px;
   }
-  .path-card p {
+  .gate-panel .gate-desc {
     font-size: clamp(13px, 1.5vw, 16px);
     color: var(--text-dim);
-    line-height: 1.5;
+    line-height: 1.55;
+    margin-bottom: 16px;
   }
-  .path-card .reason-tag {
-    margin-top: auto;
-    padding-top: 16px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-dim);
-    letter-spacing: 0.05em;
-  }
-  .post-add-note { display: none; }
-  .post-add-note strong {
-    color: var(--text);
-    font-weight: 700;
-  }
-
-  /* ============ STATE MACHINE ============ */
-  .state-machine {
-    display: flex;
-    flex-direction: column;
-    gap: clamp(8px, 1.2vh, 14px);
-    max-width: 800px;
-    margin-top: clamp(16px, 2vh, 24px);
-  }
-  .state-row {
-    border: 1px solid var(--border);
-    background: var(--surface);
-    padding: clamp(14px, 2vh, 20px) clamp(20px, 2.5vw, 32px);
-    display: grid;
-    grid-template-columns: minmax(260px, 22%) 1fr;
-    gap: clamp(20px, 2.5vw, 32px);
-    align-items: center;
-    font-size: clamp(13px, 1.6vw, 17px);
-  }
-  .state-row .state-name {
+  .gate-panel .gate-outcomes {
+    list-style: none; padding: 0;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
     font-family: var(--font-mono);
     font-size: clamp(11px, 1.2vw, 13px);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--accent);
-    word-break: keep-all;
-    white-space: nowrap;
-  }
-  .state-row.terminal .state-name { color: var(--green); }
-  .state-row.transit .state-name { color: var(--amber); }
-  .state-row .state-desc { color: var(--text-dim); }
-  .state-row.terminal { border-left: 3px solid var(--green); }
-  .state-row.transit  { border-left: 3px solid var(--amber); }
-  .state-row.pending  { border-left: 3px solid var(--accent); }
-
-  /* ============ COMPARE TABLE (push vs pull) ============ */
-  .compare-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: clamp(20px, 3vh, 28px);
-    font-size: clamp(13px, 1.5vw, 16px);
-  }
-  .compare-table th, .compare-table td {
-    text-align: left;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-  }
-  .compare-table th {
-    font-family: var(--font-mono);
-    font-size: clamp(10px, 1.2vw, 13px);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
+    line-height: 1.7;
     color: var(--text-dim);
-    border-bottom: 2px solid var(--border-bright);
-    background: var(--surface);
   }
-  .compare-table th.recommended {
-    color: var(--accent);
-    background: var(--accent-dim);
-  }
-  .compare-table .check {
-    color: var(--green);
-    font-weight: 700;
-    font-family: var(--font-mono);
-  }
-  .compare-table .x {
-    color: var(--red);
-    font-weight: 700;
-    font-family: var(--font-mono);
-  }
+  .gate-panel .gate-outcomes li::before { content: "▸ "; color: var(--accent); }
+  .gate-panel.stage-2 .gate-outcomes li::before { color: var(--green); }
 
-  /* ============ CODE BLOCK ============ */
-  .code-block {
-    background: var(--code-bg);
-    color: var(--code-text);
-    padding: clamp(20px, 2.5vh, 32px) clamp(20px, 2.5vw, 32px);
-    margin-top: clamp(16px, 2vh, 24px);
-    font-family: var(--font-mono);
-    font-size: clamp(11px, 1.3vw, 14px);
-    line-height: 1.6;
-    overflow-x: auto;
-    border: 1px solid var(--border);
-    white-space: pre;
+  /* ============ CYCLE NAMING ============ */
+  .rename-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: clamp(20px, 2.5vw, 32px);
+    align-items: center;
+    margin-top: clamp(20px, 3vh, 32px);
   }
-  .code-block .ck { color: #94a3b8; font-style: italic; }
-  .code-block .kw { color: #f472b6; }
-  .code-block .id { color: #93c5fd; }
-  .code-block .lit { color: #86efac; }
+  .rename-cell {
+    border: 1px solid var(--border);
+    padding: clamp(20px, 2.5vh, 32px);
+    background: var(--surface);
+    text-align: center;
+  }
+  .rename-cell.before { opacity: 0.6; }
+  .rename-cell .rename-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  .rename-cell .rename-name {
+    font-family: var(--font-mono);
+    font-size: clamp(16px, 2.2vw, 22px);
+    font-weight: 600;
+    color: var(--text);
+  }
+  .rename-cell.before .rename-name { text-decoration: line-through; color: var(--text-dim); }
+  .rename-cell.after { border-color: var(--accent); border-top: 3px solid var(--accent); }
+  .rename-cell.after .rename-name { color: var(--accent); }
+  .rename-arrow {
+    font-family: var(--font-mono);
+    font-size: clamp(20px, 2.5vw, 28px);
+    color: var(--text-dim);
+  }
 
   /* ============ SCHEMA TABLE ============ */
   .schema-table {
@@ -476,8 +331,7 @@
     font-size: clamp(11px, 1.2vw, 13.5px);
   }
   .schema-table th, .schema-table td {
-    text-align: left;
-    padding: 6px 12px;
+    text-align: left; padding: 6px 12px;
     border-bottom: 1px solid var(--border);
     vertical-align: top;
   }
@@ -493,8 +347,277 @@
   .schema-table .col-name { color: var(--accent); font-weight: 600; }
   .schema-table .col-type { color: var(--amber); }
   .schema-table .col-note { color: var(--text-dim); font-family: var(--font-body); font-size: 0.95em; }
+  .schema-table tr.section-row td {
+    background: var(--surface);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-bright);
+  }
 
-  /* ============ UI MOCK ============ */
+  /* ============ DUAL-SCORE ============ */
+  .score-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(20px, 3vw, 36px);
+    margin-top: clamp(16px, 2vh, 24px);
+  }
+  .score-cell {
+    border: 1px solid var(--border);
+    padding: clamp(20px, 2.5vh, 32px);
+    background: var(--surface);
+  }
+  .score-cell.live { border-top: 3px solid var(--amber); }
+  .score-cell.snapshot { border-top: 3px solid var(--accent); }
+  .score-cell .score-label {
+    font-family: var(--font-mono); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--text-dim); margin-bottom: 8px;
+  }
+  .score-cell.live .score-label { color: var(--amber); }
+  .score-cell.snapshot .score-label { color: var(--accent); }
+  .score-cell .score-name {
+    font-family: var(--font-mono);
+    font-size: clamp(15px, 1.8vw, 19px);
+    font-weight: 600;
+    margin-bottom: 12px;
+    word-break: break-word;
+  }
+  .score-cell .score-desc {
+    font-size: clamp(13px, 1.5vw, 15px);
+    color: var(--text-dim);
+    line-height: 1.55;
+  }
+  .score-cell .score-trigger {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  /* ============ OVERRIDE FLOW ============ */
+  .override-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: clamp(12px, 1.6vw, 22px);
+    margin-top: clamp(16px, 2vh, 24px);
+  }
+  .override-card {
+    border: 1px solid var(--border);
+    padding: clamp(16px, 2vh, 24px);
+    background: var(--surface);
+  }
+  .override-card.rejected {
+    background: var(--red-dim);
+    border-color: color-mix(in srgb, var(--red) 30%, transparent);
+  }
+  .override-card.chosen { border-top: 3px solid var(--green); }
+  .override-card .ov-label {
+    font-family: var(--font-mono); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--text-dim); margin-bottom: 10px;
+  }
+  .override-card.rejected .ov-label { color: var(--red); }
+  .override-card.chosen .ov-label { color: var(--green); }
+  .override-card .ov-name {
+    font-family: var(--font-mono);
+    font-size: clamp(13px, 1.5vw, 15px);
+    font-weight: 600;
+    margin-bottom: 10px;
+    word-break: break-word;
+  }
+  .override-card .ov-desc {
+    font-size: clamp(12px, 1.4vw, 14.5px);
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .override-card.rejected .ov-name { text-decoration: line-through; color: var(--text-dim); }
+
+  /* ============ RESOLVER SPLIT ============ */
+  .resolver-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: clamp(12px, 1.6vw, 22px);
+    margin-top: clamp(20px, 3vh, 32px);
+  }
+  .resolver-card {
+    border: 1px solid var(--border);
+    border-top: 3px solid;
+    padding: clamp(16px, 2vh, 26px) clamp(14px, 1.6vw, 20px);
+    background: var(--surface);
+    display: flex; flex-direction: column;
+  }
+  .resolver-card.orchestrator { border-top-color: var(--accent); }
+  .resolver-card.internal { border-top-color: var(--amber); }
+  .resolver-card.external { border-top-color: var(--green); }
+  .resolver-card .res-eyebrow {
+    font-family: var(--font-mono); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    margin-bottom: 8px;
+  }
+  .resolver-card.orchestrator .res-eyebrow { color: var(--accent); }
+  .resolver-card.internal .res-eyebrow { color: var(--amber); }
+  .resolver-card.external .res-eyebrow { color: var(--green); }
+  .resolver-card .res-name {
+    font-family: var(--font-mono);
+    font-size: clamp(13px, 1.5vw, 16px);
+    font-weight: 600;
+    margin-bottom: 12px;
+    word-break: break-word;
+  }
+  .resolver-card .res-desc {
+    font-size: clamp(13px, 1.5vw, 15px);
+    color: var(--text-dim);
+    line-height: 1.55;
+    flex: 1;
+  }
+  .resolver-card .res-verdicts {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+  .resolver-card .res-verdicts span {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    margin: 2px 4px 2px 0;
+    color: var(--text);
+  }
+
+  /* ============ STATE MACHINE / FLOW ============ */
+  .flow-list {
+    display: flex; flex-direction: column;
+    gap: clamp(8px, 1.2vh, 14px);
+    margin-top: clamp(16px, 2vh, 24px);
+  }
+  .flow-row {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: clamp(12px, 1.8vh, 18px) clamp(20px, 2.5vw, 28px);
+    display: grid;
+    grid-template-columns: 30px minmax(180px, 22%) 1fr;
+    gap: clamp(16px, 2.2vw, 28px);
+    align-items: baseline;
+    font-size: clamp(13px, 1.6vw, 16px);
+  }
+  .flow-row .flow-num {
+    font-family: var(--font-mono); font-size: 14px;
+    color: var(--text-dim); letter-spacing: 0.05em;
+  }
+  .flow-row .flow-key {
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.2vw, 13px);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+  }
+  .flow-row .flow-desc { color: var(--text-dim); line-height: 1.55; }
+  .flow-row.terminal { border-left: 3px solid var(--green); }
+  .flow-row.transit { border-left: 3px solid var(--amber); }
+  .flow-row.start { border-left: 3px solid var(--accent); }
+
+  /* ============ EVENTS LIST ============ */
+  .events-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(20px, 2.5vw, 32px);
+    margin-top: clamp(16px, 2vh, 24px);
+  }
+  .event-col {
+    border: 1px solid var(--border);
+    padding: clamp(16px, 2vh, 22px) clamp(16px, 2vw, 22px);
+    background: var(--surface);
+  }
+  .event-col h4 {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .event-col.setters h4 { color: var(--accent); }
+  .event-col.jobs h4 { color: var(--amber); }
+  .event-list {
+    list-style: none; padding: 0;
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.2vw, 13.5px);
+    line-height: 1.85;
+  }
+  .event-list li::before { content: "▸ "; color: var(--text-dim); }
+  .event-name { color: var(--text); }
+  .event-fail .event-name { color: var(--red); }
+
+  /* ============ THREE CALLERS ============ */
+  .callers-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: clamp(12px, 1.6vw, 22px);
+    margin-top: clamp(16px, 2vh, 24px);
+  }
+  .caller-card {
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    background: var(--surface);
+    padding: clamp(14px, 1.8vh, 22px);
+    text-align: center;
+  }
+  .caller-card .caller-name {
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.2vw, 13px);
+    font-weight: 600;
+    margin-bottom: 6px;
+    word-break: break-word;
+  }
+  .caller-card .caller-desc {
+    font-size: clamp(11px, 1.3vw, 13px);
+    color: var(--text-dim);
+    line-height: 1.45;
+  }
+  .converge-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: clamp(10px, 1.4vh, 16px);
+  }
+  .converge-arrow {
+    font-family: var(--font-mono);
+    font-size: clamp(20px, 2.5vw, 28px);
+    color: var(--text-dim);
+    line-height: 1;
+  }
+  .converge-target {
+    margin-top: clamp(8px, 1.2vh, 14px);
+    border: 1px solid var(--accent);
+    background: var(--accent-dim);
+    padding: clamp(14px, 1.8vh, 22px) clamp(20px, 2.5vw, 32px);
+    text-align: center;
+  }
+  .converge-target .ct-name {
+    font-family: var(--font-mono);
+    font-size: clamp(15px, 1.8vw, 19px);
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .converge-target .ct-desc {
+    font-size: clamp(12px, 1.4vw, 14.5px);
+    color: var(--text-dim);
+  }
+
+  /* ============ M4 UI MOCK ============ */
   .ui-grid {
     display: grid;
     grid-template-columns: 5fr 4fr;
@@ -504,109 +627,80 @@
   .ui-mock {
     border: 1px solid var(--border);
     background: var(--surface);
-    padding: clamp(16px, 2vh, 24px) clamp(16px, 2vw, 24px);
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
+    padding: clamp(16px, 2vh, 24px);
+    display: flex; flex-direction: column; min-width: 0;
   }
   .ui-mock .mock-label {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--text-dim);
-    margin-bottom: 12px;
+    font-family: var(--font-mono); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--text-dim); margin-bottom: 12px;
   }
-  .ui-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
+  .ui-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .ui-table th, .ui-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    text-align: left;
+    padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left;
   }
   .ui-table th {
-    background: var(--surface2);
-    font-weight: 500;
-    color: var(--text-dim);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    background: var(--surface2); font-weight: 500; color: var(--text-dim);
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase;
   }
   .ui-table td.score-low { color: var(--red); font-weight: 600; }
-  .ui-mock .row-action {
-    color: var(--accent);
-    font-weight: 500;
-  }
-  .detail-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    font-size: clamp(13px, 1.5vw, 15px);
-  }
-  .detail-stack .detail-row {
-    padding: 10px 12px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-  }
+  .row-action { color: var(--accent); font-weight: 500; }
+  .detail-stack { display: flex; flex-direction: column; gap: 10px; font-size: clamp(13px, 1.5vw, 15px); }
+  .detail-stack .detail-row { padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); }
   .detail-stack .detail-row strong {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--text-dim);
-    display: block;
-    margin-bottom: 4px;
+    font-family: var(--font-mono); font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--text-dim); display: block; margin-bottom: 4px;
   }
   .ui-callout {
-    margin-top: clamp(16px, 2vh, 24px);
-    padding: clamp(14px, 1.8vh, 20px) clamp(20px, 2.5vw, 28px);
+    margin-top: clamp(14px, 1.8vh, 22px);
+    padding: clamp(12px, 1.6vh, 18px) clamp(16px, 2vw, 24px);
     background: var(--accent-dim);
     border-left: 3px solid var(--accent);
-    font-size: clamp(13px, 1.5vw, 16px);
+    font-size: clamp(13px, 1.5vw, 15px);
     line-height: 1.55;
   }
   .ui-callout strong { color: var(--accent); }
 
-  /* ============ OPEN QUESTIONS ============ */
-  .question-list {
+  /* ============ M5 SHAPES ============ */
+  .shapes-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: clamp(8px, 1vh, 12px) clamp(12px, 1.6vw, 20px);
-    margin-top: clamp(10px, 1.4vh, 18px);
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: clamp(12px, 1.6vw, 22px);
+    margin-top: clamp(16px, 2vh, 24px);
   }
-  @media (max-width: 900px) {
-    .question-list { grid-template-columns: 1fr; }
-  }
-  .question {
-    border: 1px solid var(--border);
-    padding: clamp(10px, 1.2vh, 14px) clamp(14px, 1.8vw, 20px);
+  .shape-card {
+    border: 1px dashed var(--border-bright);
+    padding: clamp(16px, 2vh, 24px);
     background: var(--surface);
+    display: flex; flex-direction: column;
   }
-  .question .q-title {
-    font-size: clamp(13px, 1.5vw, 16px);
+  .shape-card .shape-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .shape-card .shape-name {
+    font-size: clamp(15px, 1.8vw, 18px);
     font-weight: 700;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
   }
-  .question .q-options {
-    font-size: clamp(11px, 1.2vw, 13px);
+  .shape-card .shape-desc {
+    font-size: clamp(12px, 1.4vw, 14.5px);
     color: var(--text-dim);
     line-height: 1.5;
+    flex: 1;
   }
-  .question .q-lean {
-    margin-top: 6px;
-    font-family: var(--font-mono);
-    font-size: clamp(10px, 1vw, 12px);
+  .shape-card .shape-tag {
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-dim); letter-spacing: 0.08em;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--accent);
-  }
-  .question .q-lean::before {
-    content: "▸ leaning ";
-    color: var(--text-dim);
   }
 
   /* ============ MILESTONES ============ */
@@ -621,9 +715,7 @@
     border-top: 3px solid var(--accent);
     background: var(--surface);
     padding: clamp(10px, 1.4vh, 18px) clamp(10px, 1.2vw, 16px);
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
+    display: flex; flex-direction: column; min-width: 0;
   }
   .milestone .m-num {
     font-family: var(--font-mono);
@@ -634,15 +726,14 @@
     margin-bottom: 4px;
   }
   .milestone h3 {
-    font-size: clamp(13px, 1.4vw, 16px);
+    font-size: clamp(12px, 1.3vw, 15px);
     font-weight: 700;
     margin-bottom: 8px;
     line-height: 1.2;
   }
   .milestone ul {
-    list-style: none;
-    padding: 0;
-    font-size: clamp(11px, 1.1vw, 12.5px);
+    list-style: none; padding: 0;
+    font-size: clamp(10px, 1vw, 12px);
     line-height: 1.4;
     color: var(--text-dim);
   }
@@ -659,6 +750,12 @@
     color: var(--accent);
     font-weight: 700;
   }
+  .milestone li .ticket {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
   .milestone .m-est {
     margin-top: auto;
     padding-top: 10px;
@@ -669,6 +766,30 @@
   }
   @media (max-width: 1100px) {
     .milestone-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  /* ============ DECISIONS LIST ============ */
+  .decision-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(8px, 1vh, 12px) clamp(14px, 2vw, 24px);
+    margin-top: clamp(12px, 1.6vh, 20px);
+  }
+  .decision {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-left: 3px solid var(--green);
+    padding: clamp(10px, 1.4vh, 16px) clamp(14px, 1.8vw, 20px);
+  }
+  .decision .d-title {
+    font-size: clamp(13px, 1.5vw, 15px);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .decision .d-body {
+    font-size: clamp(11px, 1.2vw, 13px);
+    color: var(--text-dim);
+    line-height: 1.5;
   }
 
   /* ============ REFERENCES ============ */
@@ -687,10 +808,7 @@
     display: block;
     transition: border-color 0.2s ease, background 0.2s ease;
   }
-  .ref:hover {
-    border-color: var(--accent);
-    background: var(--accent-dim);
-  }
+  .ref:hover { border-color: var(--accent); background: var(--accent-dim); }
   .ref .ref-label {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -699,10 +817,7 @@
     color: var(--accent);
     margin-bottom: 6px;
   }
-  .ref .ref-name {
-    font-size: clamp(15px, 1.7vw, 18px);
-    font-weight: 700;
-  }
+  .ref .ref-name { font-size: clamp(15px, 1.7vw, 18px); font-weight: 700; }
   .ref .ref-desc {
     font-size: clamp(12px, 1.3vw, 14px);
     color: var(--text-dim);
@@ -710,43 +825,11 @@
     line-height: 1.5;
     word-break: break-all;
   }
-  .next-steps {
-    margin-top: clamp(28px, 4vh, 44px);
-    border-top: 1px solid var(--border);
-    padding-top: clamp(20px, 3vh, 32px);
-  }
-  .next-steps h3 {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--text-dim);
-    margin-bottom: 14px;
-  }
-  .next-steps ol {
-    padding-left: 20px;
-    font-size: clamp(14px, 1.6vw, 17px);
-    line-height: 1.7;
-    color: var(--text);
-  }
-  .next-steps .step-done {
-    color: var(--text-dim);
-  }
-  .next-steps .step-done s {
-    text-decoration-color: var(--text-dim);
-    text-decoration-thickness: 1px;
-  }
-  .next-steps .step-check {
-    display: inline-block;
-    color: var(--green);
-    font-weight: 700;
-    margin-right: 6px;
-  }
 
   /* ============ Smaller-viewport tuning ============ */
   @media (max-height: 800px) {
     .slide { padding: clamp(28px, 4.5vh, 56px) clamp(32px, 6vw, 80px); }
-    .state-row { padding: 8px 14px; }
+    .flow-row { padding: 8px 14px; }
     .schema-table th, .schema-table td { padding: 5px 10px; font-size: 11.5px; }
     .standard-inner { gap: clamp(8px, 1.4vh, 16px); }
   }
@@ -757,8 +840,13 @@
     .schema-table th, .schema-table td { padding: 4px 8px; font-size: 11px; }
   }
   @media (max-width: 880px) {
-    .scope-grid, .paths-grid, .ui-grid { grid-template-columns: 1fr; }
-    .state-row { grid-template-columns: 1fr; gap: 8px; }
+    .gates-grid, .score-pair, .events-grid, .ui-grid,
+    .resolver-grid, .override-row, .callers-row, .shapes-grid,
+    .decision-list, .rename-row {
+      grid-template-columns: 1fr;
+    }
+    .rename-arrow { transform: rotate(90deg); }
+    .flow-row { grid-template-columns: 1fr; gap: 8px; }
   }
 </style>
 </head>
@@ -770,537 +858,492 @@
   <section class="slide slide--title">
     <div class="title-grid">
       <div class="accent-bar reveal"></div>
-      <p class="number-mark reveal">Project · 2026-04-27</p>
-      <h1 class="display reveal">Approval Workflow</h1>
-      <p class="subheading reveal">Game plan for the upstream gate that ships completed audit programs to Platform. Working synthesis, open questions, push architecture, issue breakdown.</p>
+      <p class="label reveal" style="position: static; margin: 0;">Engineering plan</p>
+      <h1 class="display reveal">Approval Workflow.</h1>
+      <p class="subheading reveal" style="max-width: 680px;">Two gates, one cycle row, fourteen tickets across five milestones.</p>
       <div class="meta-row reveal">
-        <span>Audit Team</span>
-        <span>Capital Expense</span>
+        <span>14 issues · 39 pts + 1 spike</span>
+        <span>AUD-721 → AUD-736</span>
       </div>
     </div>
   </section>
 
-  <!-- 02 PROBLEM -->
+  <!-- 02 TWO GATES -->
   <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">01 · The problem</p>
-      <h2 class="heading reveal">Audit results go out by hand. Nobody is tracking the trip.</h2>
-      <p class="body reveal">Today, results are reviewed manually, exported to PDF or Excel, and emailed to Klients. The system has no record of whether that has happened. Below-95% monthly programs have no quality gate before they ship. Operational drag, error risk, and zero auditability around &ldquo;is this done yet?&rdquo;</p>
-      <p class="body reveal" style="color: var(--text);">A second motivation worth naming: 5 monthly audits is sometimes too few. One bad audit can skew the aggregate score, especially for inpatient. The &ldquo;Add 5 more&rdquo; mechanic is intentional sample-size protection.</p>
-    </div>
-  </section>
-
-  <!-- 03 VISION -->
-  <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">02 · The vision</p>
-      <h2 class="heading reveal">Eventually: auto-release to Klient dashboards. This project is the upstream gate.</h2>
-      <p class="body reveal">Long term, audit results land automatically in Platform-side Klient dashboards. Brad and Brian own the final approval inside Platform before Klients see anything. This project sits one step upstream: the place where Jill reviews below-95% monthlies and decides whether to add more samples or release the result for Platform to consume.</p>
-      <p class="body reveal" style="color: var(--text);">&ldquo;Approval&rdquo; in this app means <strong>make data available to Platform</strong>. It is not approval-for-reporting. The existing internal Reporting page (PDF/Excel exports) stays open as today.</p>
-    </div>
-  </section>
-
-  <!-- 04 SCOPE -->
-  <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">03 · Scope</p>
-      <h2 class="heading reveal">What we are building, and what we are not.</h2>
-      <div class="scope-grid reveal">
-        <div class="scope-panel in-scope">
-          <h3>In scope</h3>
-          <ul>
-            <li>Single Monthly tab in Jill's queue</li>
-            <li>Below-95% monthlies appear for review</li>
-            <li>Detail page with problem audits only</li>
-            <li>Approve action, Add 5 More action</li>
-            <li>Internal note per program</li>
-            <li>Approvals (history) tab for resolved problem children</li>
+    <div class="standard-inner wide">
+      <p class="label reveal">02 · Two gates, both ours</p>
+      <h2 class="heading reveal">Most groups never see a human. The ones that do route to two distinct gates, and we own both halves.</h2>
+      <div class="gates-grid reveal">
+        <div class="gate-panel stage-1">
+          <div class="gate-eyebrow">Stage 1 · Internal review</div>
+          <h3>Audit-side decision</h3>
+          <p class="gate-desc">Below-threshold monthlies route to Jill. She approves as-is or asks for more audits. Initials always auto-approve here regardless of score, by product call.</p>
+          <ul class="gate-outcomes">
+            <li><code>internal_approved_at</code> + <code>internal_approved_by_id</code></li>
+            <li><code>internal_more_audits_requested_at</code></li>
+            <li><code>concluded_at</code> (cron-stamped, under-target)</li>
           </ul>
         </div>
-        <div class="scope-panel out-scope">
-          <h3>Out of scope</h3>
-          <ul>
-            <li>Initials tab / approval flow</li>
-            <li>A new "lead auditor" role</li>
-            <li>Coder education / coaching dashboards</li>
-            <li>Program-progression dashboards</li>
-            <li>Klient or Koder facing views</li>
-            <li>Platform's dashboards, exports, or PDF rendering</li>
+        <div class="gate-panel stage-2">
+          <div class="gate-eyebrow">Stage 2 · Release gate</div>
+          <h3>Platform-side decision</h3>
+          <p class="gate-desc">Above-threshold groups bypass the gate entirely. Below-threshold groups (monthly or initial) hold for explicit external approval by Brad and Brian on Platform.</p>
+          <ul class="gate-outcomes">
+            <li><code>auto_released_at</code> (system bypass)</li>
+            <li><code>external_approved_at</code> + <code>external_reviewer_id</code></li>
+            <li><code>external_rejected_at</code> + <code>external_reviewer_id</code></li>
           </ul>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- 05 WHO -->
+  <!-- 03 CYCLE -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">04 · Audience</p>
-      <h2 class="heading reveal">Just Jill. System admin only.</h2>
-      <p class="body reveal">Access is gated to the <code>system_admin</code> role. No new role needs to exist. The new <code>Audits::ApprovalsController</code> gets a matching Pundit policy with the standard <code>index?</code> / <code>show?</code> / <code>update?</code> methods, all gated on <code>user.system_admin?</code>. Brad and Brian's downstream approval lives in Platform and is out of scope here.</p>
+      <p class="label reveal">03 · The unit</p>
+      <h2 class="heading reveal"><code>AuditProgramCycle</code>. <span style="color: var(--text-dim); font-weight: 500;">One row per coder's body of work in a program for a given period.</span></h2>
+      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px); font-size: clamp(14px, 1.7vw, 17px);">One row per <code>(audit_program, coder, period_key)</code>. Materializes on the first <code>evaluation.completed</code> event for the group and accumulates join rows as evaluations complete.</p>
+      <ul class="reveal" style="list-style: none; padding: 0; margin-top: clamp(12px, 1.6vh, 20px); font-size: clamp(13px, 1.5vw, 16px); line-height: 1.9; color: var(--text-dim);">
+        <li><span style="color: var(--accent); font-family: var(--font-mono); font-size: 0.9em;">▸</span> Monthly programs: <code>period_key</code> like <code>"2026-04"</code>, one row per coder per month.</li>
+        <li><span style="color: var(--accent); font-family: var(--font-mono); font-size: 0.9em;">▸</span> Initial round 1 / round 2: <code>period_key</code> is nil, exactly one row per coder per program.</li>
+        <li><span style="color: var(--accent); font-family: var(--font-mono); font-size: 0.9em;">▸</span> Direct programs and one-off programs: not released, no <code>approval_config</code>, no cycle rows.</li>
+      </ul>
+      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px);">UI vocabulary stays specific to Jill's case ("Approve" button, <code>/audits/approvals</code> route). The underlying record is honest about being broader.</p>
     </div>
   </section>
 
-  <!-- 06 THREE PATHS -->
+  <!-- 04 SCHEMA -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">05 · The four paths</p>
-      <h2 class="heading reveal">Four trigger paths converge on the same record.</h2>
-      <p class="body reveal">Every audit program, when complete, produces an <strong>outcome</strong> ready to be released to Platform. How it got triggered varies. The resulting record is the same shape.</p>
-      <div class="paths-grid reveal">
-        <div class="path-card manual">
-          <div class="path-num">01</div>
-          <h3>Manual approval</h3>
-          <p>Below-95% monthly. Jill clicks "Approve" in her queue.</p>
-          <div class="reason-tag">reason: manual_approval</div>
-        </div>
-        <div class="path-card auto">
-          <div class="path-num">02</div>
-          <h3>Auto above-threshold</h3>
-          <p>Monthly completes with score ≥ 95%. Skips Jill's queue entirely.</p>
-          <div class="reason-tag">reason: auto_above_threshold</div>
-        </div>
-        <div class="path-card initial">
-          <div class="path-num">03</div>
-          <h3>Auto-initial</h3>
-          <p>Initial round 1 or 2 completes (10 audits with submitted evaluations) regardless of score.</p>
-          <div class="reason-tag">reason: auto_initial</div>
-        </div>
-        <div class="path-card post-add">
-          <div class="path-num">04</div>
-          <h3>Auto post-add-more</h3>
-          <p>Jill picked "Add 5 More" earlier. New audits complete and the release fires automatically with whatever score it lands at.</p>
-          <div class="reason-tag">reason: auto_post_add_more</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 07 STATE MACHINE -->
-  <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">06 · State machine</p>
-      <h2 class="heading reveal">State derives from nullable timestamps. No string column.</h2>
-      <div class="state-machine reveal">
-        <div class="state-row pending">
-          <div class="state-name">pending review</div>
-          <div class="state-desc">Below-95% monthly group has completed. Row exists, all transition timestamps nil. Note is editable.</div>
-        </div>
-        <div class="state-row transit">
-          <div class="state-name">awaiting more audits</div>
-          <div class="state-desc">Jill picked "Add 5 More". <code>awaiting_more_audits_at</code> stamped. Target bumped 5→10. New audits in flight. Row stays alive while they complete.</div>
-        </div>
-        <div class="state-row terminal">
-          <div class="state-name">released</div>
-          <div class="state-desc">Terminal. <code>released_at</code> + <code>reason</code> stamped. Row visible to Platform via the pull endpoint.</div>
-        </div>
-      </div>
-      <p class="body reveal" style="margin-top: 16px; font-size: 13px;">Matches <code>AuditProgramMembership</code> and <code>Evaluation</code> conventions. A <code>state_timestamps_consistent</code> validation enforces ordering. Add 5 More is one-shot per group.</p>
-      <p class="body reveal" style="margin-top: 6px; font-size: 13px;"><strong style="color: var(--text);">Timestamp persistence.</strong> <code>awaiting_more_audits_at</code> is <em>not</em> cleared when the outcome eventually releases. It stays as evidence the path was taken. Predicate order resolves the overlap: <code>released?</code> wins over <code>awaiting_more_audits?</code> wins over <code>pending?</code>. So a row that took Add 5 More and then released reads as <code>released?</code>, but the <code>auto_post_add_more</code> reason and the <code>awaiting_more_audits_at</code> timestamp are still on the row for the approvals history filter.</p>
-    </div>
-  </section>
-
-  <!-- 08 NAMING -->
-  <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">07 · Why <code>AuditProgramOutcome</code></p>
-      <h2 class="heading reveal">Name the row for what it <em>is</em>, not how it got created.</h2>
-      <p class="body reveal">Manual approval of a below-95% monthly is the rare special case. Above-95% monthlies, all initials, and post-Add-5-More flows all auto-release without anyone clicking "Approve". Naming the underlying model <code>AuditApproval</code> would mis-name three of the four paths.</p>
-      <p class="body reveal" style="color: var(--text);">An <strong>outcome</strong> is what the row represents: the result of an audit cycle for a coder + program + period. Every path produces the same shape of record. The name decouples the model from any particular handoff mechanic (push, pull, future tighter integration). UI vocabulary stays specific to Jill's case: button still says "Approve", page still lives at <code>/audits/approvals</code>. The underlying record is honest about being broader.</p>
-    </div>
-  </section>
-
-  <!-- 09 SCHEMA -->
-  <section class="slide">
-    <div class="standard-inner wide">
-      <p class="label reveal">08 · Schema <span class="suggestion-pill">per group</span></p>
-      <h2 class="heading reveal">One row per group. Evaluations attach via a join.</h2>
-      <p class="body reveal" style="font-size: clamp(12px, 1.3vw, 14px); margin-top: -4px;">Group identity = (audit_program, coder, period_key). Unique index on those three. Monthlies cycle (one row per coder per month). Initials are one row per coder per program (period_key = nil).</p>
-      <table class="schema-table reveal">
+      <p class="label reveal">04 · Schema</p>
+      <h2 class="heading reveal">State derives from which timestamps are present. No string status column.</h2>
+      <table class="schema-table reveal" style="margin-top: clamp(12px, 1.8vh, 20px);">
         <thead>
-          <tr><th>audit_program_outcomes</th><th>Type</th><th>Note</th></tr>
+          <tr><th style="width: 32%;">Column</th><th style="width: 22%;">Type</th><th>Meaning</th></tr>
         </thead>
         <tbody>
-          <tr><td class="col-name">audit_program_id</td><td class="col-type">references, NOT NULL</td><td class="col-note">part of composite unique index</td></tr>
-          <tr><td class="col-name">coder_id</td><td class="col-type">references, NOT NULL</td><td class="col-note">part of composite unique index</td></tr>
+          <tr class="section-row"><td colspan="3">Identity &amp; metadata</td></tr>
           <tr><td class="col-name">period_key</td><td class="col-type">string</td><td class="col-note">"YYYY-MM" for monthlies, nil for initials</td></tr>
-          <tr><td class="col-name">metadata</td><td class="col-type">jsonb</td><td class="col-note">informational only (e.g., team_id at release time). Not part of identity.</td></tr>
-          <tr><td class="col-name">released_by_id</td><td class="col-type">references users</td><td class="col-note">nil for auto paths</td></tr>
-          <tr><td class="col-name">reason</td><td class="col-type">string</td><td class="col-note">manual_approval · auto_above_threshold · auto_initial · auto_post_add_more</td></tr>
-          <tr><td class="col-name">awaiting_more_audits_at</td><td class="col-type">datetime</td><td class="col-note">stamped when Add 5 More fires</td></tr>
-          <tr><td class="col-name">released_at</td><td class="col-type">datetime</td><td class="col-note">stamped on release. row visible to Platform via pull endpoint</td></tr>
-          <tr><td class="col-name">aggregate_score_snapshot</td><td class="col-type">decimal(5,2)</td><td class="col-note">captured at release time via Reporting::Scores</td></tr>
-          <tr><td class="col-name">note</td><td class="col-type">text</td><td class="col-note">Jill's note, editable while pending</td></tr>
+          <tr><td class="col-name">metadata</td><td class="col-type">jsonb</td><td class="col-note">Informational, e.g. team_id at release. Not part of identity.</td></tr>
+          <tr><td class="col-name">note</td><td class="col-type">text</td><td class="col-note">Editable while pending</td></tr>
+
+          <tr class="section-row"><td colspan="3">Live caches (recomputed by listener)</td></tr>
+          <tr><td class="col-name">aggregate_score</td><td class="col-type">decimal(5,2)</td><td class="col-note">Live, recomputed from active completed evaluations</td></tr>
+          <tr><td class="col-name">evaluations_count</td><td class="col-type">integer</td><td class="col-note">Live counter, recomputed from source</td></tr>
+          <tr><td class="col-name">target_count_override</td><td class="col-type">integer</td><td class="col-note">Add More writes per-cycle. Nil falls back to membership default.</td></tr>
+
+          <tr class="section-row"><td colspan="3">Stage 1 · internal review</td></tr>
+          <tr><td class="col-name">internal_approved_at</td><td class="col-type">datetime</td><td class="col-note">Auto or manual. Manual stamps internal_approved_by_id.</td></tr>
+          <tr><td class="col-name">internal_more_audits_requested_at</td><td class="col-type">datetime</td><td class="col-note">Add More click. Stamps the requesting user id.</td></tr>
+          <tr><td class="col-name">concluded_at</td><td class="col-type">datetime</td><td class="col-note">Cron-stamped when monthly cycle's period elapsed under-target.</td></tr>
+
+          <tr class="section-row"><td colspan="3">Stage 2 · release gate</td></tr>
+          <tr><td class="col-name">auto_released_at</td><td class="col-type">datetime</td><td class="col-note">System bypass (above-threshold scores). No external party acted.</td></tr>
+          <tr><td class="col-name">external_approved_at</td><td class="col-type">datetime</td><td class="col-note">External party explicitly approved.</td></tr>
+          <tr><td class="col-name">external_rejected_at</td><td class="col-type">datetime</td><td class="col-note">External party explicitly rejected.</td></tr>
+          <tr><td class="col-name">external_reviewer_id</td><td class="col-type">string</td><td class="col-note">Free-text. Brad and Brian have no Audit User records today.</td></tr>
+          <tr><td class="col-name">aggregate_score_snapshot</td><td class="col-type">decimal(5,2)</td><td class="col-note">Frozen at Stage 2 settlement (auto_release or external_approve).</td></tr>
         </tbody>
       </table>
-      <p class="body reveal" style="margin-top: 8px; font-size: clamp(12px, 1.3vw, 14px);">Sibling join table <code>audit_program_outcome_evaluations</code> ties evaluations to outcomes (added_at / removed_at), pinning the at-release-time set through subsequent revisions.</p>
     </div>
   </section>
 
-  <!-- 09 OVERLAP WITH REPORTING SUMMARY -->
-  <section class="slide">
-    <div class="standard-inner wide">
-      <p class="label reveal">09 · Overlap with the reporting summary</p>
-      <h2 class="heading reveal">We share computation. We do not share records.</h2>
-      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); margin-top: -4px;">There is real conceptual overlap with <code>Reporting::AuditProgramMembershipSummary</code>: both group evaluations, both score them, both partition audits. The instinct is "make summary a real record and let outcomes inherit from it." The code says no — different lifetimes, reifying summary breaks reporting.</p>
-      <table class="compare-table reveal">
-        <thead>
-          <tr>
-            <th></th>
-            <th>AuditProgramMembershipSummary</th>
-            <th class="recommended">AuditProgramOutcome</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Lifetime</td><td>live, re-queried every render</td><td>persisted, immutable after release</td></tr>
-          <tr><td>Score</td><td>recomputes from current evaluations</td><td>frozen at release time</td></tr>
-          <tr><td>Reacts to evaluation revisions</td><td class="check">✓ next render reflects new score</td><td class="x">✗ snapshot stays put</td></tr>
-          <tr><td>Surface</td><td>reporting page (internal)</td><td>outcome row (Platform consumes)</td></tr>
-        </tbody>
-      </table>
-      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);"><strong style="color: var(--text);">What we lean on (M2 work):</strong> lift <code>partition_audits</code> and <code>build_scores</code> from private methods onto a public surface so <code>OutcomeResolver</code> calls the same code reporting calls. Cadence dispatch (<code>AuditPrograms::ProgressBucketKey.cadence_for</code>) and <code>Reporting::Scores</code> are already public. No fork, no drift.</p>
-    </div>
-  </section>
-
-  <!-- 10 APPROVAL CONFIG -->
-  <section class="slide">
-    <div class="standard-inner wide">
-      <p class="label reveal">10 · approval_config</p>
-      <h2 class="heading reveal">Per-program JSON config drives release behavior.</h2>
-      <p class="body reveal">New nullable JSON column on <code>audit_programs</code>, mirroring the existing <code>selection_config</code> and <code>graduation_config</code> pattern. "No config = excluded from release" replaces the hardcoded "direct programs excluded" rule. Monthly / initial / direct / one-off become config differences, not code branches.</p>
-      <table class="schema-table reveal">
-        <thead>
-          <tr><th>Program kind</th><th>period</th><th>threshold</th><th>manual_review</th><th>add_more</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Monthly (platform)</td><td><code>monthly</code></td><td>95.0</td><td>true</td><td>5</td></tr>
-          <tr><td>Initial 1 / Initial 2</td><td><code>none</code></td><td>95.0</td><td>true</td><td>5</td></tr>
-          <tr><td>One-off</td><td colspan="4">no config (excluded, not getting released)</td></tr>
-          <tr><td>Direct programs</td><td colspan="4">no config (excluded)</td></tr>
-        </tbody>
-      </table>
-      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">The <code>add_more_count</code> field makes Add 5 More per-program tunable. Default 5. If a program configures 3, the button reads "Add 3 More."</p>
-      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);"><strong style="color: var(--text);">M1 includes a backfill task</strong> alongside the migration so existing platform monthly / IR1 / IR2 programs get the right config on day one. Without it, every existing program ships excluded.</p>
-    </div>
-  </section>
-
-  <!-- 11 RELEASE IGNITION -->
+  <!-- 05 LIVE VS SNAPSHOT -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">11 · Trigger model</p>
-      <h2 class="heading reveal">Two ways in, one resolver, one place to land.</h2>
-      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); margin-top: -4px;">A group is eligible when <strong style="color: var(--text);">all attached audits have completed evaluations</strong> AND one of these triggers fires:</p>
-      <div class="paths-grid reveal" style="grid-template-columns: 1fr 1fr;">
-        <div class="path-card auto">
-          <div class="path-num">A</div>
-          <h3>An evaluation completes</h3>
-          <p>Listen on <code>evaluation.completed</code>. Ask: was that the last incomplete evaluation in the group? If yes, hand the group to the resolver.</p>
-          <div class="reason-tag">covers monthlies + initials</div>
+      <p class="label reveal">05 · Live versus snapshot</p>
+      <h2 class="heading reveal">Two score columns. Both persist. Product picks which one to display per surface.</h2>
+      <div class="score-pair reveal">
+        <div class="score-cell live">
+          <div class="score-label">Live cache</div>
+          <div class="score-name">aggregate_score</div>
+          <div class="score-desc">Recomputed from source on every relevant evaluation event. Reflects active completed evaluations right now. Keeps moving as evaluations complete, get discarded, or get resurrected through revisions.</div>
+          <div class="score-trigger">RECOMPUTED ON: evaluation.completed, evaluation.discarded</div>
         </div>
-        <div class="path-card manual">
-          <div class="path-num">B</div>
-          <h3>A month rolls over</h3>
-          <p>Daily Sidekiq cron scans for monthly groups whose period passed AND every attached audit has a completed evaluation. Add-5-More near month-end waits for the new audits to evaluate.</p>
-          <div class="reason-tag">monthlies only</div>
+        <div class="score-cell snapshot">
+          <div class="score-label">Frozen at release</div>
+          <div class="score-name">aggregate_score_snapshot</div>
+          <div class="score-desc">Captures the score at the moment the cycle became Klient-eligible. Stamped only by auto_release! and external_approve!. Never by external_reject!. If a release is revoked and re-issued, the next settlement re-stamps.</div>
+          <div class="score-trigger">STAMPED ON: auto_released_at, external_approved_at</div>
         </div>
       </div>
-      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">The <strong style="color: var(--text);">resolver</strong> is a service class (<code>AuditProgramOutcomes::OutcomeResolver</code>) that reuses <code>Reporting::Scores</code> for aggregate computation. Both paths call it with the same input: a candidate group. Returns: auto-release now, hold for manual review, or not eligible yet.</p>
     </div>
   </section>
 
-  <!-- 12 ADD 5 MORE -->
+  <!-- 06 TARGET OVERRIDE -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">12 · The Add 5 More mechanic</p>
-      <h2 class="heading reveal">Bump the cap, sample now, fill organically.</h2>
-      <p class="body reveal">When Jill clicks Add 5 More, we read <code>approval_config.add_more_count</code> (default 5), bump the membership's <code>audit_target_count</code> by that amount, stamp <code>awaiting_more_audits_at</code> on the existing outcome row, and immediately invoke a one-shot sample/create pass for that coder + program + period. Whatever eligible charts already exist get audits right away. Subsequent nightly trigger runs continue filling any open slots.</p>
-      <p class="body reveal" style="color: var(--text);">Period scoping matters: a stale row from February clicked in May must sample charts <strong>coded in February</strong>. The trigger pipeline currently hardcodes <code>Time.current</code>, so M3 threads an <code>at:</code> parameter through. Per-program tunable via <code>add_more_count</code>. Once-per-group only.</p>
+      <p class="label reveal">06 · Per-cycle target override</p>
+      <h2 class="heading reveal"><code>target_count_override</code> lifts the target for one cycle's period.</h2>
+      <p class="body reveal" style="margin-top: clamp(8px, 1vh, 16px);">A nullable integer column on the cycle row. The override lives where it belongs: on the cycle itself, naturally bounded to <code>period_key</code>. Next month's cycle is a fresh row with no override and falls back to the membership default. April's bump never reaches May.</p>
+      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px); font-size: clamp(13px, 1.5vw, 16px);"><code>effective_target_count</code> on the cycle returns <code>target_count_override || membership.audit_target_count</code>. <code>target_met?</code> and <code>under_target?</code> ask whether <code>evaluations_count >= effective_target_count</code>.</p>
+      <div class="reveal" style="margin-top: clamp(16px, 2vh, 24px); padding: clamp(14px, 1.8vh, 20px) clamp(20px, 2.5vw, 28px); background: var(--accent-dim); border-left: 3px solid var(--accent); font-size: clamp(13px, 1.5vw, 15px); line-height: 1.55;">
+        <strong style="color: var(--accent);">Trigger Quota learns the same lookup.</strong> When the nightly trigger runs <code>AuditTriggers::Queries::Quota</code> on a monthly-cadence program, it reads <code>target_count_override</code> for the same <code>(program, coder, period_key)</code> tuple and uses it when present. The nightly fills remaining slots after a partial Add More.
+      </div>
     </div>
   </section>
 
-  <!-- 12 PULL HANDOFF -->
-  <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">13 · Audit ← Platform handoff <span class="suggestion-pill">team chose pull</span></p>
-      <h2 class="heading reveal">Platform queries us when they need data. We expose, they consume.</h2>
-      <p class="body reveal">Original lean was push. After the Aaron and Scott review the team chose <strong>pull</strong>. Trade-offs we accepted:</p>
-      <table class="compare-table reveal">
-        <thead>
-          <tr>
-            <th>Criterion</th>
-            <th class="recommended">Pull (chosen)</th>
-            <th>Push</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Platform owns when to consume (poll, on-render, batch)</td>
-            <td class="check">✓</td>
-            <td class="x">✗</td>
-          </tr>
-          <tr>
-            <td>No outbound HTTP infrastructure on our side</td>
-            <td class="check">✓ (just expose endpoint)</td>
-            <td class="x">✗ (job, retries, Bugsnag)</td>
-          </tr>
-          <tr>
-            <td>No feature switch needed</td>
-            <td class="check">✓</td>
-            <td class="x">✗</td>
-          </tr>
-          <tr>
-            <td>Inherently idempotent</td>
-            <td class="check">✓ (it's a GET)</td>
-            <td>requires payload-key idempotency</td>
-          </tr>
-          <tr>
-            <td>Resilient if Audit is briefly down</td>
-            <td class="x">✗ (Platform dashboard degrades)</td>
-            <td class="check">✓ (push on recovery)</td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">The runtime-coupling tradeoff is mitigated by Platform-side caching and a "no data yet" fallback UI.</p>
-    </div>
-  </section>
-
-  <!-- 13 PULL ENDPOINT -->
-  <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">14 · Pull endpoint</p>
-      <h2 class="heading reveal">A read-only JSON endpoint Platform queries.</h2>
-      <p class="body reveal">Mirrors existing Audit API conventions (<code>/api/v1/</code>, <code>X-API-Key</code> auth). No outbound HTTP, no Sidekiq job, no feature switch.</p>
-      <pre class="code-block reveal"><span class="ck"># GET /api/v1/audit_program_outcomes</span>
-<span class="kw">GET</span> /api/v1/audit_program_outcomes?
-  client_id=<span class="lit">123</span>
-  &amp;program_id=<span class="lit">789</span>
-  &amp;coder_external_id=<span class="lit">"ext_456"</span>
-  &amp;period=<span class="lit">"2026-04"</span>
-  &amp;status=<span class="lit">"released"</span>
-<span class="kw">Authorization</span>: X-API-Key &lt;token&gt;
-
-<span class="ck"># Internal release event still emits for audit-trail / future use.</span>
-<span class="kw">EventBus</span>.emit(<span class="lit">"audit_program_outcome.released"</span>, {
-  audit_program_outcome_id: outcome.id,
-  audit_program_id: outcome.audit_program_id,
-  coder_id: outcome.coder_id,
-  period_key: outcome.period_key,
-  released_at: outcome.released_at,
-  reason: outcome.reason
-})</pre>
-      <p class="body reveal" style="font-size: clamp(13px, 1.4vw, 15px); color: var(--text-dim);"><strong style="color: var(--text);">Platform doesn't have to be ready on day one.</strong> The endpoint exists and returns outcome rows the moment <code>released_at</code> is set. Platform calls when ready. No traffic until then.</p>
-    </div>
-  </section>
-
-  <!-- 13 PAYLOAD -->
-  <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">15 · Response shape <span class="suggestion-pill">lean richer</span></p>
-      <h2 class="heading reveal">Top-level summary plus nested evaluation detail.</h2>
-      <p class="body reveal">Lean toward more data, not less. Platform may not need every field today, but exposing them costs us little and saves a round-trip if their dashboards or PDFs want any of it.</p>
-      <pre class="code-block reveal">{
-  <span class="kw">"outcomes"</span>: [
-    {
-      <span class="kw">"id"</span>: <span class="lit">"out-123"</span>,
-      <span class="kw">"audit_program"</span>: { <span class="kw">"id"</span>: 789, <span class="kw">"name"</span>: <span class="lit">"Inpatient Monthly"</span> },
-      <span class="kw">"coder"</span>: { <span class="kw">"id"</span>: 456, <span class="kw">"external_id"</span>: <span class="lit">"ext_456"</span> },
-      <span class="kw">"period_key"</span>: <span class="lit">"2026-04"</span>,
-      <span class="kw">"scores"</span>: { <span class="kw">"overall"</span>: 94.5, <span class="kw">"diagnosis"</span>: 92.0, <span class="ck">/* ... */</span> },
-      <span class="kw">"released_at"</span>: <span class="lit">"2026-04-30T17:30:00Z"</span>,
-      <span class="kw">"reason"</span>: <span class="lit">"auto_above_threshold"</span>,
-      <span class="kw">"evaluations"</span>: [ <span class="ck">/* per-eval id, audit_id, scores, auditor, notes ... */</span> ]
-    }
-  ],
-  <span class="kw">"pagination"</span>: { <span class="kw">"total"</span>: 45, <span class="kw">"page"</span>: 1, <span class="kw">"limit"</span>: 50 }
-}</pre>
-    </div>
-  </section>
-
-  <!-- 14 UI -->
+  <!-- 07 RESOLVER SPLIT -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">16 · The UI</p>
-      <h2 class="heading reveal">A small surface. Two pages, one hidden caveat.</h2>
+      <p class="label reveal">07 · The resolver, split</p>
+      <h2 class="heading reveal">Three classes. One conditional family per file. Sub-services are pure decisions, the orchestrator owns the writes.</h2>
+      <div class="resolver-grid reveal">
+        <div class="resolver-card orchestrator">
+          <div class="res-eyebrow">Orchestrator · M2.4</div>
+          <div class="res-name">AuditProgramCycles::Resolver</div>
+          <div class="res-desc">Public entry point. Calls InternalResolver, applies the verdict via cycle setters, and only calls ExternalResolver if Stage 1 settled internally approved. Single locus of side effects.</div>
+          <div class="res-verdicts">CALLED BY: M2.5 listener · M2.6 cron</div>
+        </div>
+        <div class="resolver-card internal">
+          <div class="res-eyebrow">Stage 1 · M2.2</div>
+          <div class="res-name">InternalResolver</div>
+          <div class="res-desc">Pure decision. Initials always auto-approve. Monthlies hold below threshold when manual review required and no Add More requested yet. Reads aggregate_score, never writes.</div>
+          <div class="res-verdicts"><span>:auto_approve_internal</span><span>:hold</span><span>:not_eligible</span></div>
+        </div>
+        <div class="resolver-card external">
+          <div class="res-eyebrow">Stage 2 · M2.3</div>
+          <div class="res-name">ExternalResolver</div>
+          <div class="res-desc">Pure decision. Holds when below threshold (monthly or initial). Auto-releases otherwise. Reads aggregate_score, never writes. Idempotent under repeat calls.</div>
+          <div class="res-verdicts"><span>:auto_release</span><span>:hold</span><span>:not_eligible</span></div>
+        </div>
+      </div>
+      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px);">Mirrors <code>AuditTriggers::AuditCreator</code> orchestrating its <code>Queries::*</code> sub-services. Each gate's logic ships as its own tight 2-pt PR.</p>
+    </div>
+  </section>
+
+  <!-- 08 LISTENER -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">08 · Per-completion materialization</p>
+      <h2 class="heading reveal">M2.5 · ResolutionHandler subscribes to evaluation events. The job recomputes and resolves.</h2>
+      <div class="flow-list reveal">
+        <div class="flow-row start">
+          <span class="flow-num">01</span>
+          <span class="flow-key">SUBSCRIBE</span>
+          <span class="flow-desc">on <code>evaluation.completed</code> and <code>evaluation.discarded</code>, enqueue ResolutionHandlerJob.</span>
+        </div>
+        <div class="flow-row transit">
+          <span class="flow-num">02</span>
+          <span class="flow-key">SKIP / FIND</span>
+          <span class="flow-desc">Skip if program has no <code>approval_config</code>. Find or create the cycle and the join row.</span>
+        </div>
+        <div class="flow-row transit">
+          <span class="flow-num">03</span>
+          <span class="flow-key">RECOMPUTE</span>
+          <span class="flow-desc">Query fresh state, rewrite <code>evaluations_count</code> and <code>aggregate_score</code> on the cycle. Never delta-track.</span>
+        </div>
+        <div class="flow-row terminal">
+          <span class="flow-num">04</span>
+          <span class="flow-key">RESOLVE</span>
+          <span class="flow-desc">Call <code>Resolver.call(cycle:)</code>. Both gates run in one pass when possible.</span>
+        </div>
+      </div>
+      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px);">Recompute, never delta-track. <code>EvaluationDiscardForm</code> can resurrect an original on revision-discard without firing a new event. Full recompute on every event reflects the resurrected state without special-case code.</p>
+    </div>
+  </section>
+
+  <!-- 09 CRON -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">09 · Daily under-target cron</p>
+      <h2 class="heading reveal">M2.6 · Catches monthlies whose period elapsed without reaching target.</h2>
+      <p class="body reveal">Five audits sampled, only three completed by month-end because of chart availability or late auditor work. The per-completion edge will not fire again. The cron picks them up.</p>
+      <div class="flow-list reveal">
+        <div class="flow-row start">
+          <span class="flow-num">01</span>
+          <span class="flow-key">SCAN</span>
+          <span class="flow-desc">Find monthlies past their period, under target, all attached audits' evaluations completed, Gate 1 not yet settled.</span>
+        </div>
+        <div class="flow-row transit">
+          <span class="flow-num">02</span>
+          <span class="flow-key">CONCLUDE</span>
+          <span class="flow-desc">Call <code>cycle.conclude!</code>. Stamps <code>concluded_at</code>, emits <code>audit_program_cycle.concluded</code>.</span>
+        </div>
+        <div class="flow-row terminal">
+          <span class="flow-num">03</span>
+          <span class="flow-key">RESOLVE</span>
+          <span class="flow-desc">Call <code>Resolver.call(cycle:)</code>. The orchestrator now treats the concluded cycle as eligible. Same path as the listener.</span>
+        </div>
+      </div>
+      <p class="body reveal" style="margin-top: clamp(10px, 1.4vh, 18px);">Initials never get cron-finalized. Under-target initials sit indefinitely. Explicit product call.</p>
+    </div>
+  </section>
+
+  <!-- 10 EVENTS -->
+  <section class="slide">
+    <div class="standard-inner wide">
+      <p class="label reveal">10 · Eventing</p>
+      <h2 class="heading reveal">Decision moments are events. Live caches are not.</h2>
+      <div class="events-grid reveal">
+        <div class="event-col setters">
+          <h4>Setters emit</h4>
+          <ul class="event-list">
+            <li><span class="event-name">audit_program_cycle.created</span></li>
+            <li><span class="event-name">audit_program_cycle.internally_auto_approved</span></li>
+            <li><span class="event-name">audit_program_cycle.internally_manually_approved</span></li>
+            <li><span class="event-name">audit_program_cycle.more_audits_requested</span></li>
+            <li><span class="event-name">audit_program_cycle.auto_released</span></li>
+            <li><span class="event-name">audit_program_cycle.externally_approved</span></li>
+            <li><span class="event-name">audit_program_cycle.externally_rejected</span></li>
+            <li><span class="event-name">audit_program_cycle.concluded</span></li>
+          </ul>
+        </div>
+        <div class="event-col jobs">
+          <h4>Jobs emit on rescue</h4>
+          <ul class="event-list">
+            <li class="event-fail"><span class="event-name">audit_program_cycle.resolution_failed</span></li>
+            <li class="event-fail"><span class="event-name">audit_program_cycle.rollover_failed</span></li>
+          </ul>
+          <h4 style="margin-top: 18px;">Convention</h4>
+          <p class="body" style="font-size: 12.5px; max-width: none;"><code>actor_id</code> auto-injected from <code>Current.user&amp;.id</code>. Auto-path events firing from background jobs naturally have nil actor_id, which is the correct signal that no human took the action.</p>
+          <p class="body" style="font-size: 12.5px; max-width: none; margin-top: 8px;">No <code>klient_visible</code> event. Subscribers compose by registering against both <code>auto_released</code> and <code>externally_approved</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 APPROVAL CONFIG -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">11 · approval_config</p>
+      <h2 class="heading reveal">A program has <code>approval_config</code> or it doesn't. That's the gate.</h2>
+      <p class="body reveal">Programs without <code>approval_config</code> are excluded from the workflow. This replaces the hardcoded "direct programs excluded" rule and lets monthly / initial / one-off / direct become config differences rather than code branches.</p>
+      <table class="schema-table reveal">
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="col-name">period</td><td class="col-type">symbol</td><td class="col-note">:none for initials, :monthly for monthlies</td></tr>
+          <tr><td class="col-name">requires_manual_review_below_threshold</td><td class="col-type">boolean</td><td class="col-note">Gates monthly-below-threshold routing to Jill</td></tr>
+          <tr><td class="col-name">add_more_count</td><td class="col-type">integer</td><td class="col-note">Default 5. How many additional audits per Add More click.</td></tr>
+        </tbody>
+      </table>
+      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px);">Provisioner stamps the canonical config at platform-source program creation time. M1.3 backfills existing platform programs.</p>
+    </div>
+  </section>
+
+  <!-- 12 AUDITS::CREATOR CONSOLIDATION -->
+  <section class="slide">
+    <div class="standard-inner wide">
+      <p class="label reveal">12 · M3.1 · One creation primitive</p>
+      <h2 class="heading reveal">Three creation surfaces. One per-chart primitive. <code>Audits::Creator</code> (PR #747) becomes canonical.</h2>
+      <div class="callers-row reveal">
+        <div class="caller-card">
+          <div class="caller-name">Trigger pipeline</div>
+          <div class="caller-desc">Nightly batch. Today duplicates the lock + dup-check + persist + emit inline.</div>
+        </div>
+        <div class="caller-card">
+          <div class="caller-name">Bulk form (PR #747)</div>
+          <div class="caller-desc">User picks specific charts in the Charts index UI. Already calls Audits::Creator.</div>
+        </div>
+        <div class="caller-card">
+          <div class="caller-name">Add More (M3.2)</div>
+          <div class="caller-desc">One-shot creation per click. Calls Audits::Creator directly per chart.</div>
+        </div>
+      </div>
+      <div class="converge-row reveal">
+        <div class="converge-arrow">↓</div>
+        <div class="converge-target">
+          <div class="ct-name">Audits::Creator</div>
+          <div class="ct-desc">pg advisory lock · matching_chart dup-check · Audit.create! · emit audit.created</div>
+        </div>
+      </div>
+      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px); text-align: center;">Trigger keeps its outer orchestration (selection, quota, dry-run, trigger-execution tracking) and delegates the per-chart work. Reconciled <code>audit.created</code> payload across callers.</p>
+    </div>
+  </section>
+
+  <!-- 13 ADD MORE FLOW -->
+  <section class="slide">
+    <div class="standard-inner">
+      <p class="label reveal">13 · M3.2 · AddMoreAudits</p>
+      <h2 class="heading reveal">One transaction. Five steps. The bump is per-period, never permanent.</h2>
+      <div class="flow-list reveal">
+        <div class="flow-row start">
+          <span class="flow-num">01</span>
+          <span class="flow-key">READ</span>
+          <span class="flow-desc">Read <code>add_more_count</code> from the program's <code>approval_config</code> (default 5).</span>
+        </div>
+        <div class="flow-row transit">
+          <span class="flow-num">02</span>
+          <span class="flow-key">OVERRIDE</span>
+          <span class="flow-desc">Write <code>cycle.target_count_override = effective_target_count + add_more_count</code>.</span>
+        </div>
+        <div class="flow-row transit">
+          <span class="flow-num">03</span>
+          <span class="flow-key">STAMP</span>
+          <span class="flow-desc">Call <code>cycle.request_more_audits!(by:)</code>. Stamps the timestamp and by_id, emits the event.</span>
+        </div>
+        <div class="flow-row transit">
+          <span class="flow-num">04</span>
+          <span class="flow-key">QUERY</span>
+          <span class="flow-desc">Short inline AR query. <code>Chart.without_audits</code> + filters + <code>order("RANDOM()").limit(N)</code>.</span>
+        </div>
+        <div class="flow-row terminal">
+          <span class="flow-num">05</span>
+          <span class="flow-key">CREATE</span>
+          <span class="flow-desc">For each picked chart, call <code>Audits::Creator.call(...)</code>. Atomic with the override write and the cycle stamp.</span>
+        </div>
+      </div>
+      <p class="body reveal" style="margin-top: clamp(10px, 1.4vh, 18px);">No charts available is success with <code>audits_created: 0</code>. The override persists; nightly fills the remaining slots if charts arrive before period close.</p>
+    </div>
+  </section>
+
+  <!-- 14 M4 UI -->
+  <section class="slide">
+    <div class="standard-inner wide">
+      <p class="label reveal">14 · M4 · Approval queue</p>
+      <h2 class="heading reveal">Jill's Stage 1 surface. Full show page styled after evaluation show. System-admin-only.</h2>
       <div class="ui-grid reveal">
         <div class="ui-mock">
           <div class="mock-label">Index · /audits/approvals</div>
           <table class="ui-table">
             <thead>
-              <tr><th>Coder</th><th>Client</th><th>Chart Type</th><th>Score</th><th>Audits</th><th></th></tr>
+              <tr><th>Coder</th><th>Program</th><th>Period</th><th style="text-align: right;">Score</th><th style="text-align: right;">N/Target</th></tr>
             </thead>
             <tbody>
-              <tr><td>Jane Doe</td><td>Hospital A</td><td>Outpatient</td><td class="score-low">87.5</td><td>5</td><td class="row-action">View →</td></tr>
-              <tr><td>John Smith</td><td>Hospital B</td><td>Inpatient</td><td class="score-low">91.2</td><td>10</td><td class="row-action">View →</td></tr>
-              <tr><td>Pat Roe</td><td>Hospital A</td><td>Inpatient</td><td class="score-low">94.0</td><td>5</td><td class="row-action">View →</td></tr>
+              <tr><td>J. Reyes</td><td>Monthly</td><td>2026-04</td><td class="score-low" style="text-align: right;">87.4</td><td style="text-align: right;">5/5</td></tr>
+              <tr><td>P. Hayes</td><td>Monthly</td><td>2026-04</td><td class="score-low" style="text-align: right;">91.2</td><td style="text-align: right;">10/10</td></tr>
+              <tr><td>K. Cho</td><td>Monthly</td><td>2026-03</td><td class="score-low" style="text-align: right;">89.6</td><td style="text-align: right;">3/5</td></tr>
+              <tr><td>L. Tanaka</td><td>Monthly</td><td>2026-04</td><td class="score-low" style="text-align: right;">88.0</td><td style="text-align: right;">5/5</td></tr>
+              <tr><td>M. Singh</td><td>Monthly</td><td>2026-04</td><td class="score-low" style="text-align: right;">93.1</td><td style="text-align: right;">5/5</td></tr>
             </tbody>
           </table>
         </div>
         <div class="ui-mock">
-          <div class="mock-label">Detail page</div>
+          <div class="mock-label">Show · /audits/approvals/:id</div>
           <div class="detail-stack">
-            <div class="detail-row"><strong>Header</strong>Client · Chart Type · Coder · encounters audited · score summary</div>
-            <div class="detail-row"><strong>Aggregate</strong>Overall + categorical (Diagnosis, Procedure, DRG, Technical)</div>
-            <div class="detail-row"><strong>Internal note</strong>Single editable text, no versioning</div>
-            <div class="detail-row"><strong>Problem audits</strong>Only audits below 95% appear here</div>
-            <div class="detail-row"><strong>Actions</strong>Approve · Add 5 More</div>
+            <div class="detail-row"><strong>Aggregate</strong>87.4% · DX 84 · PX 89 · DRG 88 · TECH 90</div>
+            <div class="detail-row"><strong>Internal note</strong>Editable while pending. No version history.</div>
+            <div class="detail-row"><strong>Below-95 audits</strong>Loop over evaluations. Reuse evaluation show partials.</div>
+            <div class="detail-row"><strong>Actions</strong><span class="row-action">[ Approve ]</span> &nbsp; <span class="row-action">[ Add More ]</span></div>
           </div>
         </div>
       </div>
-      <div class="ui-callout reveal">
-        <strong>Caveat:</strong> if a coder has 5 audits and one scored 100% but the others dragged the aggregate below 95%, the 100% one is hidden on the detail page. The page surfaces what went wrong, not the full roster.
-      </div>
+      <div class="ui-callout reveal"><strong>System-admin-only.</strong> No "lead auditor" role per PRD. Auditors, audit managers, client admins, coders, and Klients see nothing. M4.4 (nav drawer exposure) lands last, after index, show, and filters are all in main.</div>
     </div>
   </section>
 
-  <!-- 15 OPEN QUESTIONS -->
+  <!-- 15 M5 SPIKE -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">17 · Open questions</p>
-      <h2 class="heading reveal">Decisions still pending. Framed as proposals, not decrees.</h2>
-      <div class="question-list reveal">
-        <div class="question">
-          <div class="q-title">Response detail level</div>
-          <div class="q-options">Starting point: flattish envelope with outcome fields, scores, audit count. If Platform needs full line-item comparisons or per-audit detail, expose a sibling endpoint at <code>:id</code>. Confirm with Platform.</div>
-          <div class="q-lean">flattish now, deepen later via sibling endpoint</div>
+      <p class="label reveal">15 · M5 · Platform integration</p>
+      <h2 class="heading reveal">A spike. The shape of the Platform handoff is what M5 figures out.</h2>
+      <p class="body reveal">M5 is a single ticket. Output is a decision document plus an open-questions list reviewed with Platform. Optional local prototype if a clear lead emerges. Real implementation tickets get drafted after the spike lands.</p>
+      <div class="shapes-grid reveal">
+        <div class="shape-card">
+          <div class="shape-label">Shape A</div>
+          <div class="shape-name">JSON endpoint</div>
+          <div class="shape-desc">Mirrors /api/v1/ conventions, X-API-Key, Pagy, Pundit. Optional write endpoint that PATCHes Platform's release decision back.</div>
+          <div class="shape-tag">Familiar territory</div>
         </div>
-        <div class="question">
-          <div class="q-title">Period scoping in the audit-creation pipeline</div>
-          <div class="q-options"><code>AuditTriggers::AuditCreator</code>, <code>Queries::Scope</code>, and <code>Queries::Quota</code> all hardcode <code>Time.current</code>. Add 5 More on a stale row needs an <code>at:</code> parameter threaded through three callsites. Real M3 task.</div>
-          <div class="q-lean">thread at: through the pipeline</div>
+        <div class="shape-card">
+          <div class="shape-label">Shape B</div>
+          <div class="shape-name">Turbo frames</div>
+          <div class="shape-desc">Platform pages embed turbo frames fetching rendered fragments from Audit. Less duplicate UI work for Platform. Auth and CSP are open.</div>
+          <div class="shape-tag">Tighter coupling</div>
         </div>
-        <div class="question">
-          <div class="q-title">UI shape for the <code>awaiting_more_audits</code> state</div>
-          <div class="q-options">Once Jill clicks Add 5 More, the outcome enters a "waiting for new audits to land and complete" state for days. <strong>A.</strong> Tabs on the index (<code>Pending</code> / <code>Awaiting more audits</code> / <code>Released</code>) — clear separation, more clicks. <strong>B.</strong> Filters on a single index — one table, status pills, full visibility. <strong>C.</strong> Fire-and-forget — row drops off Jill's queue once Add 5 More fires and only reappears when the new audits resolve.</div>
-          <div class="q-lean">B · filters on a single index. Confirm with Kiley.</div>
+        <div class="shape-card">
+          <div class="shape-label">Shape C</div>
+          <div class="shape-name">Web components</div>
+          <div class="shape-desc">Reusable custom element shipped from Audit, embedded in Platform. Larger upfront cost. Build pipeline and versioning are open.</div>
+          <div class="shape-tag">Most reusable</div>
         </div>
       </div>
+      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px);">Resolved going in: pull preferred over push, cycle is the unit of release, snapshot at settlement is the score we expose, Reporting in Audit stays open with no gating change.</p>
     </div>
   </section>
 
   <!-- 16 MILESTONES -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">18 · Issue breakdown <span class="suggestion-pill">rough cut</span></p>
-      <h2 class="heading reveal">Five milestones. Rough estimate of how this could be sliced.</h2>
-      <p class="body reveal">Bullets are scope items, not 1:1 issues. Models ship with their scopes and predicates as one unit. Migrations ship with their backfills. Final issue boundaries get drawn at ticket time. Dependencies noted in each card.</p>
+      <p class="label reveal">16 · Milestones</p>
+      <h2 class="heading reveal">14 issues across 5 milestones. 39 pts plus one unpointed spike.</h2>
       <div class="milestone-grid reveal">
         <div class="milestone">
-          <div class="m-num">M1</div>
-          <h3>Foundation</h3>
+          <div class="m-num">M1 · Foundation</div>
+          <h3>Models and config</h3>
           <ul>
-            <li>AuditProgramOutcome + OutcomeEvaluation models, migrations, scopes, predicates</li>
-            <li>approval_config jsonb migration with add_more_count</li>
-            <li>Backfill task for existing platform monthlies / IR1 / IR2</li>
-            <li>EventBus events + Pundit policy</li>
+            <li>AuditProgramCycle <span class="ticket">AUD-723 · 3</span></li>
+            <li>approval_config + provisioner <span class="ticket">AUD-724 · 3</span></li>
+            <li>approval_config backfill <span class="ticket">AUD-725 · 2</span></li>
           </ul>
-          <div class="m-est">depends on: nothing</div>
+          <div class="m-est">8 PTS · 3 ISSUES</div>
         </div>
         <div class="milestone">
-          <div class="m-num">M2</div>
-          <h3>Auto-release wiring</h3>
+          <div class="m-num">M2 · Auto-release</div>
+          <h3>Wiring</h3>
           <ul>
-            <li>evaluation.completed listener calls OutcomeResolver</li>
-            <li>OutcomeResolver reuses Reporting::AuditProgramMembershipGrouper + Reporting::Scores</li>
-            <li>Auto-release on monthly ≥ 95% / initial completion</li>
-            <li>Daily Sidekiq cron for the calendar path (monthlies only)</li>
-            <li>Pre-create pending rows for below-95% monthlies</li>
+            <li>Reporting-math lift <span class="ticket">AUD-726 · 2</span></li>
+            <li>InternalResolver <span class="ticket">AUD-727 · 2</span></li>
+            <li>ExternalResolver <span class="ticket">AUD-728 · 2</span></li>
+            <li>Resolver orchestrator <span class="ticket">AUD-729 · 2</span></li>
+            <li>ResolutionHandler + Job <span class="ticket">AUD-730 · 3</span></li>
+            <li>Daily rollover cron <span class="ticket">AUD-731 · 3</span></li>
           </ul>
-          <div class="m-est">depends on: M1</div>
+          <div class="m-est">14 PTS · 6 ISSUES</div>
         </div>
         <div class="milestone">
-          <div class="m-num">M3</div>
-          <h3>Add 5 More</h3>
+          <div class="m-num">M3 · Add more</div>
+          <h3>Per-cycle bump</h3>
           <ul>
-            <li>Target-bump service (reads add_more_count from config)</li>
-            <li>Period-scoped one-shot sample/create pass</li>
-            <li>Auto-release on completion of new audits (auto_post_add_more)</li>
-            <li>Split: extract shared creation pipeline out of <code>AuditTriggers::</code> first, Add 5 More on top</li>
+            <li>Audits::Creator promote <span class="ticket">AUD-721 · 2</span></li>
+            <li>AddMoreAudits service <span class="ticket">AUD-722 · 3</span></li>
           </ul>
-          <div class="m-est">depends on: M1, exposed via M4</div>
+          <div class="m-est">5 PTS · 2 ISSUES</div>
         </div>
         <div class="milestone">
-          <div class="m-num">M4</div>
-          <h3>Approval Queue UI</h3>
+          <div class="m-num">M4 · UI</div>
+          <h3>Sysadmin only</h3>
           <ul>
-            <li>Audits::ApprovalsController + routes</li>
-            <li>Index view (table)</li>
-            <li>Detail view (problem audits only)</li>
-            <li>Approve action + Add 5 More action (calls M3)</li>
-            <li>Internal note editing</li>
-            <li>Approvals history tab</li>
+            <li>Approval queue index <span class="ticket">AUD-732 · 3</span></li>
+            <li>Approval cycle show <span class="ticket">AUD-733 · 5</span></li>
+            <li>Approval queue filters <span class="ticket">AUD-734 · 3</span></li>
+            <li>Nav drawer exposure <span class="ticket">AUD-735 · 1</span></li>
           </ul>
-          <div class="m-est">depends on: M1, M3</div>
+          <div class="m-est">12 PTS · 4 ISSUES</div>
         </div>
         <div class="milestone">
-          <div class="m-num">M5</div>
-          <h3>Platform pull endpoint</h3>
+          <div class="m-num">M5 · Spike</div>
+          <h3>Platform integration</h3>
           <ul>
-            <li>Api::V1::AuditProgramOutcomesController</li>
-            <li>X-API-Key auth (existing pattern)</li>
-            <li>Filters: client, program, coder_external_id, period, status</li>
-            <li>Pagination via Pagy + Pundit policy</li>
-            <li>Sibling :id detail endpoint if Platform asks for deeper data</li>
+            <li>Decision doc + open Qs <span class="ticket">AUD-736</span></li>
+            <li>Optional prototype</li>
+            <li>Real tickets land after</li>
           </ul>
-          <div class="m-est">depends on: M1</div>
+          <div class="m-est">UNPOINTED · 1 ISSUE</div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- 18 POST-M5 EXPLORATION -->
+  <!-- 17 REFERENCES -->
   <section class="slide">
     <div class="standard-inner wide">
-      <p class="label reveal">19 · Post-M5 exploration <span class="suggestion-pill">future work</span></p>
-      <h2 class="heading reveal">We own both apps. Worth prototyping tighter UI handoffs.</h2>
-      <p class="body reveal">Once the JSON endpoint is live and Platform is consuming, two patterns are worth standing up locally to see if they hold:</p>
-      <div class="paths-grid reveal" style="grid-template-columns: 1fr 1fr;">
-        <div class="path-card auto">
-          <div class="path-num">1</div>
-          <h3>Turbo frames embedded in Platform</h3>
-          <p>Platform's dashboard pages embed turbo frames that pull rendered fragments from Audit (outcome-detail panel, problem-audits list). Audit serves the fragment using its existing reporting-page styling. Auth via session sharing or signed URLs. Less duplicate UI work for Platform; consistent rendering across both apps.</p>
-          <div class="reason-tag">cheapest to prototype</div>
-        </div>
-        <div class="path-card manual">
-          <div class="path-num">2</div>
-          <h3>Web components shipped from Audit</h3>
-          <p>Reusable custom element exported from Audit, embedded in Platform. Platform passes filter params (program, coder, period). Component fetches its own data and renders. Larger upfront cost, more reusable across surfaces.</p>
-          <div class="reason-tag">bigger investment</div>
-        </div>
-      </div>
-      <p class="body reveal" style="margin-top: 4px; font-size: clamp(12px, 1.3vw, 14px);">Both live outside the M1-M5 scope. We own both apps locally so a quick prototype is cheap. If the patterns prove out, they become incremental layers on top of the M5 endpoint.</p>
-    </div>
-  </section>
-
-  <!-- 19 REFERENCES -->
-  <section class="slide">
-    <div class="standard-inner">
-      <p class="label reveal">20 · References &amp; next steps</p>
-      <h2 class="heading reveal">Where to dig in. What we need before we start.</h2>
+      <p class="label reveal">17 · References</p>
+      <h2 class="heading reveal">Where to dig in.</h2>
       <div class="refs-grid reveal">
-        <a href="https://v0-approval-dashboard-ochre.vercel.app/" class="ref" target="_blank" rel="noopener">
-          <div class="ref-label">UI / UX prototype</div>
-          <div class="ref-name">Vercel approval dashboard</div>
-          <div class="ref-desc">v0-approval-dashboard-ochre.vercel.app</div>
+        <a href="https://linear.app/kodehealth/project/approval-workflow-8c59ff62b181" class="ref" target="_blank" rel="noopener">
+          <div class="ref-label">Linear project</div>
+          <div class="ref-name">Approval Workflow</div>
+          <div class="ref-desc">14 issues · 5 milestones · AUD-721 → AUD-736</div>
         </a>
         <a href="https://linear.app/kodehealth/document/prd-audit-approval-queue-ebbd8b475872" class="ref" target="_blank" rel="noopener">
           <div class="ref-label">Product spec</div>
           <div class="ref-name">PRD: Audit Approval Queue</div>
           <div class="ref-desc">Kiley Blake</div>
         </a>
-        <a href="https://linear.app/kodehealth/project/lead-auditor-approval-workflow-8c59ff62b181" class="ref" target="_blank" rel="noopener">
-          <div class="ref-label">Linear project</div>
-          <div class="ref-name">Approval Workflow</div>
-          <div class="ref-desc">Audit Team · Capital Expense</div>
+        <a href="https://v0-approval-dashboard-ochre.vercel.app/" class="ref" target="_blank" rel="noopener">
+          <div class="ref-label">UI prototype</div>
+          <div class="ref-name">Vercel approval dashboard</div>
+          <div class="ref-desc">v0-approval-dashboard-ochre.vercel.app</div>
         </a>
-      </div>
-      <div class="next-steps reveal">
-        <h3>Before we start</h3>
-        <ol>
-          <li class="step-done"><span class="step-check" aria-hidden="true">✓</span> <s>Sync with Laila on this game plan, get her thoughts and pushback</s></li>
-          <li class="step-done"><span class="step-check" aria-hidden="true">✓</span> <s>Gut-check from Aaron and Scott. Outcome: pull instead of push, dual-column schema confirmed, add_more_count flexibility added, reuse of existing summary/scoring logic confirmed.</s></li>
-          <li>Talk through the open questions on slide 17. Some are blocking, others can stay open while we build.</li>
-          <li>Draft Linear issues per the M1-M5 cut.</li>
-        </ol>
+        <a href="https://github.com/kodehealth/audit/pull/747" class="ref" target="_blank" rel="noopener">
+          <div class="ref-label">Foundational PR</div>
+          <div class="ref-name">PR #747 · Audits::Creator</div>
+          <div class="ref-desc">AUD-703. M3 builds on this. Promote to canonical primitive in M3.1.</div>
+        </a>
       </div>
     </div>
   </section>
