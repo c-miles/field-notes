@@ -371,14 +371,14 @@
     background: var(--surface);
   }
   .score-cell.live { border-top: 3px solid var(--amber); }
-  .score-cell.snapshot { border-top: 3px solid var(--accent); }
+  .score-cell.released { border-top: 3px solid var(--accent); }
   .score-cell .score-label {
     font-family: var(--font-mono); font-size: 11px;
     text-transform: uppercase; letter-spacing: 0.14em;
     color: var(--text-dim); margin-bottom: 8px;
   }
   .score-cell.live .score-label { color: var(--amber); }
-  .score-cell.snapshot .score-label { color: var(--accent); }
+  .score-cell.released .score-label { color: var(--accent); }
   .score-cell .score-name {
     font-family: var(--font-mono);
     font-size: clamp(15px, 1.8vw, 19px);
@@ -943,29 +943,33 @@
           <tr><td class="col-name">external_approved_at</td><td class="col-type">datetime</td><td class="col-note">External party explicitly approved.</td></tr>
           <tr><td class="col-name">external_rejected_at</td><td class="col-type">datetime</td><td class="col-note">External party explicitly rejected.</td></tr>
           <tr><td class="col-name">external_reviewer_id</td><td class="col-type">string</td><td class="col-note">Free-text. Brad and Brian have no Audit User records today.</td></tr>
-          <tr><td class="col-name">aggregate_score_snapshot</td><td class="col-type">decimal(5,2)</td><td class="col-note">Frozen at Stage 2 settlement (auto_release or external_approve).</td></tr>
+
+          <tr class="section-row"><td colspan="3">Join · audit_program_cycle_evaluations</td></tr>
+          <tr><td class="col-name">audit_program_cycle_id</td><td class="col-type">references</td><td class="col-note">FK to the cycle. Unique with evaluation_id.</td></tr>
+          <tr><td class="col-name">evaluation_id</td><td class="col-type">references</td><td class="col-note">FK to the evaluation. Join row created on first completion, immutable thereafter.</td></tr>
+          <tr><td class="col-name">released_at</td><td class="col-type">datetime</td><td class="col-note">Stamped on then-active joins by auto_release! / external_approve!. Frozen evaluation roster as of release. Partial index for the M5 hot path.</td></tr>
         </tbody>
       </table>
     </div>
   </section>
 
-  <!-- 05 LIVE VS SNAPSHOT -->
+  <!-- 05 LIVE VS RELEASED -->
   <section class="slide">
     <div class="standard-inner">
-      <p class="label reveal">05 · Live versus snapshot</p>
-      <h2 class="heading reveal">Two score columns. Both persist. Product picks which one to display per surface.</h2>
+      <p class="label reveal">05 · Live versus released</p>
+      <h2 class="heading reveal">Live aggregate cached on the cycle. Released roster pinned via <code>released_at</code> on the join. Per-evaluation scores are immutable post-completion, so release-time aggregates re-derive deterministically.</h2>
       <div class="score-pair reveal">
         <div class="score-cell live">
           <div class="score-label">Live cache</div>
           <div class="score-name">aggregate_score</div>
-          <div class="score-desc">Recomputed from source on every relevant evaluation event. Reflects active completed evaluations right now. Keeps moving as evaluations complete, get discarded, or get resurrected through revisions.</div>
+          <div class="score-desc">Decimal column on the cycle. Recomputed from source on every relevant evaluation event. Reflects active completed evaluations right now. Keeps moving as evaluations complete, get discarded, or get resurrected through revisions.</div>
           <div class="score-trigger">RECOMPUTED ON: evaluation.completed, evaluation.discarded</div>
         </div>
-        <div class="score-cell snapshot">
-          <div class="score-label">Frozen at release</div>
-          <div class="score-name">aggregate_score_snapshot</div>
-          <div class="score-desc">Captures the score at the moment the cycle became Klient-eligible. Stamped only by auto_release! and external_approve!. Never by external_reject!. If a release is revoked and re-issued, the next settlement re-stamps.</div>
-          <div class="score-trigger">STAMPED ON: auto_released_at, external_approved_at</div>
+        <div class="score-cell released">
+          <div class="score-label">Released roster (no cached scalar)</div>
+          <div class="score-name">released_at on join · released_overall_score / released_categorical_scores / released_evaluation_scores</div>
+          <div class="score-desc">No snapshot column. <code>auto_release!</code> and <code>external_approve!</code> stamp <code>released_at</code> on the cycle-evaluation joins whose Evaluation is currently active. Released aggregate, categorical, and per-evaluation scores are instance-memoized methods that read the released set on demand. <code>external_reject!</code> stamps nothing. Revoke clears, re-issue re-stamps.</div>
+          <div class="score-trigger">STAMPED ON: auto_released_at, external_approved_at · DERIVED FROM: released_evaluations</div>
         </div>
       </div>
     </div>
@@ -1251,7 +1255,7 @@
           <div class="shape-tag">Most reusable</div>
         </div>
       </div>
-      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px);">Resolved going in: pull preferred over push, cycle is the unit of release, snapshot at settlement is the score we expose, Reporting in Audit stays open with no gating change.</p>
+      <p class="body reveal" style="margin-top: clamp(12px, 1.6vh, 20px);">Resolved going in: pull preferred over push, cycle is the unit of release, <code>released_at</code> on the join captures the active evaluation set at settlement (overall, categorical, and per-evaluation scores derived on demand), Reporting in Audit stays open with no gating change.</p>
     </div>
   </section>
 
