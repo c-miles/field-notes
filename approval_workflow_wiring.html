@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hiring the Conductor · AUD-730</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ============ THEME: Atlas · Cream & Cinnabar ============ */
+  :root {
+    --paper: #f5eedd;
+    --paper-dim: #ede5cf;
+    --paper-deep: #e1d8be;
+    --ink: #1c1815;
+    --ink-soft: #3d362f;
+    --ink-mute: #7a7066;
+    --ink-faint: #a89e90;
+    --rule: rgba(28, 24, 21, 0.12);
+    --rule-bright: rgba(28, 24, 21, 0.22);
+
+    --cinnabar: #c4452f;
+    --cinnabar-deep: #993525;
+
+    --sage: #6b8775;
+
+    --font-display: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+    --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font-body);
+    color: var(--ink);
+    background: var(--paper);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "kern", "ss01";
+  }
+
+  /* ============ DECK ENGINE ============ */
+  .deck {
+    height: 100dvh;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .slide {
+    height: 100dvh;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    padding: 0 clamp(40px, 8vw, 144px);
+    position: relative;
+    opacity: 0;
+    transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .slide.visible { opacity: 1; }
+
+  .masthead {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: baseline;
+    gap: clamp(20px, 3vw, 40px);
+    padding-top: clamp(36px, 5vh, 56px);
+    padding-bottom: clamp(14px, 1.8vh, 22px);
+    border-bottom: 1px solid var(--ink);
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1vw, 13px);
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .masthead .slug { color: var(--cinnabar); }
+  .masthead .title { color: var(--ink); text-align: center; font-weight: 500; }
+  .masthead .pageno { color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+
+  .well {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-bottom: clamp(56px, 8vh, 96px);
+    /* No container max-width on purpose. The masthead spans the slide's
+       full content frame; we let the well do the same. Each typographic
+       element (heading 38ch, body 70ch, lede 56ch) caps its own measure
+       so readability is preserved without leaving an unclaimed right
+       gutter beneath the masthead. */
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .slide.visible .reveal { opacity: 1; transform: none; }
+  .slide.visible .reveal:nth-child(1) { transition-delay: 0.05s; }
+  .slide.visible .reveal:nth-child(2) { transition-delay: 0.12s; }
+  .slide.visible .reveal:nth-child(3) { transition-delay: 0.19s; }
+  .slide.visible .reveal:nth-child(4) { transition-delay: 0.26s; }
+  .slide.visible .reveal:nth-child(5) { transition-delay: 0.33s; }
+  .slide.visible .reveal:nth-child(6) { transition-delay: 0.40s; }
+  .slide.visible .reveal:nth-child(7) { transition-delay: 0.47s; }
+  .slide.visible .reveal:nth-child(8) { transition-delay: 0.54s; }
+  @media (prefers-reduced-motion: reduce) {
+    .slide, .slide .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  }
+
+  /* ============ TYPOGRAPHY ============
+     Wider heading max-width (38ch instead of 24ch) and slightly smaller
+     display size so longer titles wrap to 1-2 lines instead of 3-4.
+     The heading-rule below stretches full content width to anchor the
+     heading visually inside the same horizontal frame as the content
+     beneath. */
+  .display {
+    font-family: var(--font-display);
+    font-size: clamp(56px, 9.5vw, 132px);
+    font-weight: 500;
+    font-variation-settings: "opsz" 60;
+    letter-spacing: -0.025em;
+    line-height: 0.96;
+    text-wrap: balance;
+    max-width: 16ch;
+    color: var(--ink);
+  }
+  .heading {
+    font-family: var(--font-display);
+    font-size: clamp(28px, 4.2vw, 48px);
+    font-weight: 500;
+    font-variation-settings: "opsz" 36;
+    letter-spacing: -0.018em;
+    line-height: 1.08;
+    text-wrap: balance;
+    max-width: 38ch;
+    color: var(--ink);
+  }
+  .heading em {
+    font-style: italic;
+    color: var(--cinnabar);
+  }
+  .heading-rule {
+    border: 0;
+    border-top: 1px solid var(--rule-bright);
+    margin: clamp(14px, 2vh, 22px) 0 clamp(16px, 2.2vh, 24px) 0;
+    width: 100%;
+  }
+  .lede {
+    font-family: var(--font-display);
+    font-size: clamp(18px, 1.9vw, 23px);
+    font-weight: 400;
+    font-style: italic;
+    font-variation-settings: "opsz" 14;
+    line-height: 1.45;
+    color: var(--ink-soft);
+    text-wrap: pretty;
+    max-width: 56ch;
+  }
+  .body {
+    font-size: clamp(14px, 1.3vw, 16.5px);
+    line-height: 1.6;
+    color: var(--ink-soft);
+    text-wrap: pretty;
+    max-width: 70ch;
+  }
+  .body + .body { margin-top: 0.7em; }
+  code, .mono {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    color: var(--cinnabar-deep);
+    background: var(--paper-deep);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  /* ============ TITLE SLIDE ============
+     Treated as a poster, not an article opening. The body slides stay
+     left-aligned editorial; the title slide centers everything so the
+     hero phrase carries the page and the empty space distributes
+     equally on both sides instead of pooling on the right. The display
+     loses its max-width so it can fit on one line at desktop widths
+     and breathe across the slide rather than wrapping awkwardly. */
+  .slide--title .well {
+    gap: clamp(16px, 2.4vh, 24px);
+    align-items: center;
+    text-align: center;
+  }
+  .slide--title .display { max-width: none; }
+  .slide--title .dek { max-width: 60ch; }
+  .slide--title .lede { max-width: 56ch; }
+  /* Dek = the small italic clarifying line that grounds the metaphor in
+     a literal subject. Sits between display and lede. */
+  .dek {
+    font-family: var(--font-display);
+    font-size: clamp(17px, 1.7vw, 22px);
+    font-weight: 400;
+    font-style: italic;
+    font-variation-settings: "opsz" 14;
+    line-height: 1.3;
+    color: var(--ink-mute);
+    letter-spacing: -0.005em;
+    max-width: 50ch;
+    margin-top: clamp(-4px, -0.4vh, -8px);
+  }
+  .slide--title .credits {
+    display: flex;
+    gap: clamp(20px, 3vw, 40px);
+    margin-top: clamp(16px, 2.4vh, 28px);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .slide--title .credits .key { color: var(--cinnabar); }
+
+  /* ============ TWO-COLUMN PANELS ============ */
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(28px, 4vw, 60px);
+  }
+  .col {
+    border-top: 2px solid var(--ink);
+    padding-top: clamp(14px, 1.8vh, 20px);
+  }
+  .col.spot { border-top-color: var(--cinnabar); }
+  .col.sage { border-top-color: var(--sage); }
+  .col-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 8px;
+  }
+  .col.spot .col-eyebrow { color: var(--cinnabar); }
+  .col.sage .col-eyebrow { color: var(--sage); }
+  .col h3 {
+    font-family: var(--font-display);
+    font-size: clamp(20px, 2.4vw, 28px);
+    font-weight: 500;
+    font-variation-settings: "opsz" 24;
+    line-height: 1.15;
+    color: var(--ink);
+    margin-bottom: 10px;
+    letter-spacing: -0.01em;
+  }
+  .col p {
+    font-size: clamp(13px, 1.2vw, 15px);
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+
+  /* ============ NUMBERED FLOW ============ */
+  .flow { display: flex; flex-direction: column; }
+  .flow-row {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: clamp(16px, 2vw, 28px);
+    padding: clamp(13px, 1.6vh, 18px) 0;
+    border-top: 1px solid var(--rule);
+    align-items: baseline;
+  }
+  .flow-row:first-child { border-top: 2px solid var(--ink); }
+  .flow-row:last-child { border-bottom: 1px solid var(--rule); }
+  .flow-num {
+    font-family: var(--font-display);
+    font-size: clamp(28px, 3.2vw, 38px);
+    font-weight: 500;
+    font-variation-settings: "opsz" 36;
+    color: var(--cinnabar);
+    line-height: 1;
+    font-variant-numeric: oldstyle-nums;
+  }
+  .flow-key {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 4px;
+  }
+  .flow-desc {
+    font-size: clamp(13px, 1.25vw, 15.5px);
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+
+  /* ============ VERDICT MATRIX ============ */
+  .matrix {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 clamp(28px, 4vw, 56px);
+  }
+  .matrix-col {
+    border-top: 2px solid var(--ink);
+    padding-top: clamp(12px, 1.6vh, 18px);
+  }
+  .matrix-col-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--cinnabar);
+    margin-bottom: clamp(10px, 1.4vh, 14px);
+  }
+  .matrix-col.sage .matrix-col-eyebrow { color: var(--sage); }
+  .matrix-col dl { display: grid; grid-template-columns: 1fr; }
+  /* Verdict color encodes action, not stage. Both :auto_approve and
+     :auto_release act, so both render in the cinnabar spot color. The
+     six no-op verdicts dim to ink-mute. The stages stay distinguishable
+     via their eyebrow labels (cinnabar vs sage). */
+  .matrix-col dt {
+    font-family: var(--font-mono);
+    font-size: clamp(13px, 1.2vw, 14.5px);
+    color: var(--cinnabar-deep);
+    font-weight: 500;
+    padding-top: clamp(10px, 1.4vh, 14px);
+  }
+  .matrix-col dt.no-op { color: var(--ink-mute); }
+  .matrix-col dd {
+    font-size: clamp(12.5px, 1.15vw, 14.5px);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    padding-bottom: clamp(10px, 1.4vh, 14px);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* ============ ROLE TRIO ============ */
+  .trio {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr 1fr;
+    gap: clamp(24px, 3vw, 44px);
+  }
+  .role {
+    border-top: 2px solid var(--ink);
+    padding-top: clamp(14px, 1.8vh, 20px);
+  }
+  .role.lead { border-top: 4px solid var(--cinnabar); }
+  .role-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 10px;
+  }
+  .role.lead .role-eyebrow { color: var(--cinnabar); }
+  .role-name {
+    font-family: var(--font-mono);
+    font-size: clamp(13px, 1.2vw, 15px);
+    color: var(--ink);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .role-desc {
+    font-size: clamp(12px, 1.1vw, 14px);
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+
+  /* ============ PIPELINE FLOW ============ */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    border-top: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+  }
+  .pipe-row {
+    display: grid;
+    grid-template-columns: clamp(140px, 18vw, 200px) 1fr;
+    align-items: baseline;
+    gap: clamp(20px, 3vw, 36px);
+    padding: clamp(12px, 1.6vh, 18px) 0;
+    border-top: 1px solid var(--rule);
+  }
+  .pipe-row:first-child { border-top: none; }
+  .pipe-actor {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cinnabar);
+  }
+  .pipe-event {
+    font-size: clamp(13px, 1.25vw, 15.5px);
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+  .pipe-event code { color: var(--ink); }
+
+  /* ============ EDGE CASES ============ */
+  .edges {
+    columns: 2;
+    column-gap: clamp(36px, 5vw, 64px);
+  }
+  .edge {
+    break-inside: avoid;
+    padding: clamp(11px, 1.4vh, 15px) 0;
+    border-top: 1px solid var(--rule);
+  }
+  .edge:first-child { border-top: 2px solid var(--ink); }
+  .edge .when {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cinnabar);
+    margin-bottom: 5px;
+  }
+  .edge .what {
+    font-size: clamp(13px, 1.15vw, 14.5px);
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+
+  /* ============ NAV CHROME ============ */
+  .progress-bar {
+    position: fixed; top: 0; left: 0; height: 3px;
+    background: var(--cinnabar); z-index: 100;
+    transition: width 0.3s ease; pointer-events: none;
+  }
+  .dots {
+    position: fixed;
+    right: clamp(16px, 1.8vw, 28px);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 100;
+  }
+  .dot {
+    width: 9px; height: 9px;
+    background: transparent;
+    border: 1px solid var(--ink-mute);
+    padding: 0;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .dot:hover { border-color: var(--ink); }
+  .dot.active { background: var(--cinnabar); border-color: var(--cinnabar); }
+  .hints {
+    position: fixed;
+    bottom: clamp(14px, 1.8vh, 22px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+    opacity: 0.7;
+    z-index: 100;
+    transition: opacity 0.5s ease;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .hints.faded { opacity: 0; pointer-events: none; }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 900px) {
+    .columns, .matrix, .trio { grid-template-columns: 1fr; }
+    .matrix-col + .matrix-col { margin-top: clamp(16px, 2.4vh, 24px); }
+    .pipe-row { grid-template-columns: 1fr; gap: 4px; }
+    .edges { columns: 1; }
+    .display { font-size: clamp(48px, 12vw, 80px); }
+    .heading { font-size: clamp(24px, 7vw, 38px); }
+    .masthead .title { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress-bar" aria-hidden="true"></div>
+<nav class="dots" id="dots" aria-label="Slide navigation"></nav>
+<div class="hints" id="hints">arrows · scroll · dots</div>
+
+<main class="deck" id="deck" tabindex="0">
+
+  <!-- 01 TITLE -->
+  <section class="slide slide--title" id="s01">
+    <header class="masthead">
+      <span class="slug">Field Notes</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 01 / 11</span>
+    </header>
+    <div class="well">
+      <h1 class="display reveal">Hiring the conductor.</h1>
+      <p class="dek reveal">On the audit program cycle resolver.</p>
+      <p class="lede reveal">Three pull requests built an orchestra. Nobody had hired a conductor. AUD-730 is the appointment.</p>
+      <div class="credits reveal">
+        <span><span class="key">Pull request</span> &nbsp;AUD-730</span>
+        <span><span class="key">Built on</span> &nbsp;AUD-727 · 728 · 729</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 WHERE WE ARE -->
+  <section class="slide" id="s02">
+    <header class="masthead">
+      <span class="slug">The orchestra</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 02 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal">Three pull requests built the players.</h2>
+      <hr class="heading-rule reveal">
+      <p class="body reveal">AUD-727 added the Stage 1 decision: <code>InternalResolver</code>. AUD-728 added Stage 2: <code>ExternalResolver</code>. AUD-729 composed them into <code>Orchestrator</code>, the class that runs both in sequence and applies their verdicts.</p>
+      <p class="body reveal">Each is a pure function. Each does what it does when it gets called. None of them know <em>when</em> to run. The full project context lives in the engineering plan deck. This one zooms in on the slice that ties the players to real events.</p>
+    </div>
+  </section>
+
+  <!-- 03 THE GAP -->
+  <section class="slide" id="s03">
+    <header class="masthead">
+      <span class="slug">The gap</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 03 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal">An orchestrator is a function. <em>A function isn't a system.</em></h2>
+      <hr class="heading-rule reveal">
+      <p class="body reveal">Until something hands the orchestrator a cycle, the gates never run. Auditors finish evaluations in the UI all day long. The cycle never gets created. No verdict gets applied. Nothing surfaces.</p>
+      <p class="body reveal">This pull request is the listener and the worker that turn evaluation events into cycle decisions. Two new files, two new lines of EventBus wiring. The lift is in what those small additions activate.</p>
+    </div>
+  </section>
+
+  <!-- 04 WHAT SHIPS -->
+  <section class="slide" id="s04">
+    <header class="masthead">
+      <span class="slug">What ships</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 04 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal">Three commits. <em>One pipeline.</em></h2>
+      <hr class="heading-rule reveal">
+      <div class="trio reveal">
+        <div class="role lead">
+          <div class="role-eyebrow">Commit 01</div>
+          <div class="role-name">ResolutionHandlerJob</div>
+          <div class="role-desc">Sidekiq worker. Loads the evaluation, finds or creates the cycle and join row, hands the cycle to the orchestrator.</div>
+        </div>
+        <div class="role">
+          <div class="role-eyebrow">Commit 02</div>
+          <div class="role-name">ResolutionHandler</div>
+          <div class="role-desc">EventBus listener. Subscribes to evaluation events and queues the job after the transaction commits.</div>
+        </div>
+        <div class="role">
+          <div class="role-eyebrow">Commit 03</div>
+          <div class="role-name">event_bus.rb</div>
+          <div class="role-desc">Two lines that wire the handler to <code>evaluation.completed</code> and <code>evaluation.discarded</code>. Activation.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 THE HANDLER -->
+  <section class="slide" id="s05">
+    <header class="masthead">
+      <span class="slug">The listener</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 05 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal"><em>ResolutionHandler</em> is a wire, not a worker.</h2>
+      <hr class="heading-rule reveal">
+      <p class="body reveal">It subscribes to two events: <code>evaluation.completed</code> and <code>evaluation.discarded</code>. When either fires, it queues the job with the evaluation's id. The work happens in the job, not in the handler.</p>
+      <p class="body reveal">Kept thin on purpose. Retries, error handling, and database calls all live downstream. The handler exists so nothing in the EventBus path can fail loudly.</p>
+    </div>
+  </section>
+
+  <!-- 06 THE JOB -->
+  <section class="slide" id="s06">
+    <header class="masthead">
+      <span class="slug">The worker</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 06 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal"><em>ResolutionHandlerJob</em> in five steps.</h2>
+      <hr class="heading-rule reveal">
+      <div class="flow reveal">
+        <div class="flow-row">
+          <div class="flow-num">1</div>
+          <div>
+            <span class="flow-key">Load</span>
+            <span class="flow-desc">Fetch the evaluation by id. If it was deleted between event emit and pickup, log info-level and skip silently.</span>
+          </div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-num">2</div>
+          <div>
+            <span class="flow-key">Filter</span>
+            <span class="flow-desc">Skip if the program has no <code>approval_config</code>. One-off and direct-source programs sit outside the workflow.</span>
+          </div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-num">3</div>
+          <div>
+            <span class="flow-key">Find or create</span>
+            <span class="flow-desc">Race-safe cycle lookup keyed on <code>(audit_program, coder, period_key)</code>.</span>
+          </div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-num">4</div>
+          <div>
+            <span class="flow-key">Attach</span>
+            <span class="flow-desc">Race-safe join row creation linking this evaluation to the cycle.</span>
+          </div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-num">5</div>
+          <div>
+            <span class="flow-key">Resolve</span>
+            <span class="flow-desc">Hand the cycle to <code>Orchestrator.call(cycle:)</code>. Verdicts get applied, events emit, the cycle settles or surfaces.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 PIPELINE END TO END -->
+  <section class="slide" id="s07">
+    <header class="masthead">
+      <span class="slug">End to end</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 07 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal">What happens when an auditor clicks <em>Complete.</em></h2>
+      <hr class="heading-rule reveal">
+      <div class="pipeline reveal">
+        <div class="pipe-row">
+          <div class="pipe-actor">Auditor</div>
+          <div class="pipe-event">Finishes their evaluation in the UI.</div>
+        </div>
+        <div class="pipe-row">
+          <div class="pipe-actor">Form</div>
+          <div class="pipe-event"><code>EvaluationCompletionForm</code> stamps scores and emits <code>evaluation.completed</code>.</div>
+        </div>
+        <div class="pipe-row">
+          <div class="pipe-actor">Handler</div>
+          <div class="pipe-event">Queues <code>ResolutionHandlerJob</code> after the DB transaction commits.</div>
+        </div>
+        <div class="pipe-row">
+          <div class="pipe-actor">Job</div>
+          <div class="pipe-event">Finds or creates the cycle and join row, then calls the orchestrator.</div>
+        </div>
+        <div class="pipe-row">
+          <div class="pipe-actor">Orchestrator</div>
+          <div class="pipe-event">Runs <code>InternalResolver</code>. If the cycle clears Stage 1, runs <code>ExternalResolver</code>.</div>
+        </div>
+        <div class="pipe-row">
+          <div class="pipe-actor">Setters</div>
+          <div class="pipe-event">Stamp <code>internal_approved_at</code> or <code>auto_released_at</code>. Emit the matching events.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 VERDICT MATRIX -->
+  <section class="slide" id="s08">
+    <header class="masthead">
+      <span class="slug">Verdicts</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 08 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal">Eight symbols. <em>Two that act,</em> six that don't.</h2>
+      <hr class="heading-rule reveal">
+      <div class="matrix reveal">
+        <div class="matrix-col">
+          <div class="matrix-col-eyebrow">Stage 1 · InternalResolver</div>
+          <dl>
+            <dt>:auto_approve</dt>
+            <dd>Above-threshold or post Add More. Orchestrator stamps <code>internal_approved_at</code> and emits <code>auto_approved</code>.</dd>
+            <dt class="no-op">:hold</dt>
+            <dd>Below threshold without an Add More request. Cycle surfaces in the system admin's approval queue.</dd>
+            <dt class="no-op">:already_settled</dt>
+            <dd>Cycle was internally approved on a previous run. Skip. Stage 2 still runs.</dd>
+            <dt class="no-op">:not_yet_ready</dt>
+            <dd>Target not met and period not closed. Cycle keeps gathering evaluations.</dd>
+          </dl>
+        </div>
+        <div class="matrix-col sage">
+          <div class="matrix-col-eyebrow">Stage 2 · ExternalResolver</div>
+          <dl>
+            <dt>:auto_release</dt>
+            <dd>Above-threshold and Stage 1 settled. Orchestrator stamps <code>auto_released_at</code> and emits <code>auto_released</code>.</dd>
+            <dt class="no-op">:hold</dt>
+            <dd>Below threshold. Cycle waits for an external reviewer to approve manually.</dd>
+            <dt class="no-op">:already_settled</dt>
+            <dd>Cycle was previously released. Skip.</dd>
+            <dt class="no-op">:not_yet_ready</dt>
+            <dd>Stage 1 hasn't approved yet. Stage 2 doesn't run.</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 EDGE CASES -->
+  <section class="slide" id="s09">
+    <header class="masthead">
+      <span class="slug">Edge cases</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 09 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal">What the pipeline handles.</h2>
+      <hr class="heading-rule reveal">
+      <div class="edges reveal">
+        <div class="edge">
+          <div class="when">Concurrent jobs on the same cycle</div>
+          <div class="what">Race-safe find or create on both the cycle and the join row, backed by unique indexes. <code>RecordNotUnique</code> falls back to <code>find_by!</code>.</div>
+        </div>
+        <div class="edge">
+          <div class="when">Evaluation deleted before the job runs</div>
+          <div class="what">Initial <code>Evaluation.find</code> raises. The job logs info-level and skips silently. No failure event.</div>
+        </div>
+        <div class="edge">
+          <div class="when">Orchestrator raises unexpectedly</div>
+          <div class="what">Top-level rescue catches, logs, sends to Bugsnag, emits <code>resolution_failed</code>. No re-raise so Sidekiq doesn't retry and double-emit auto-events.</div>
+        </div>
+        <div class="edge">
+          <div class="when">Program has no approval_config</div>
+          <div class="what">Job returns early. One-off and direct-source programs sit outside the workflow.</div>
+        </div>
+        <div class="edge">
+          <div class="when">Same evaluation completes then discards</div>
+          <div class="what">Two events fire, two jobs run. Orchestrator returns <code>:already_settled</code> on the second pass. Idempotent.</div>
+        </div>
+        <div class="edge">
+          <div class="when">Resolver dependency on cycle state</div>
+          <div class="what">Aggregate score and target progress are derivations, not cached columns. Each orchestrator run re-reads from current evaluations.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 EVENTS -->
+  <section class="slide" id="s10">
+    <header class="masthead">
+      <span class="slug">Events</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 10 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal">Decision moments are <em>events.</em></h2>
+      <hr class="heading-rule reveal">
+      <div class="columns reveal">
+        <div class="col spot">
+          <div class="col-eyebrow">On success</div>
+          <h3>auto_approved · auto_released</h3>
+          <p>Emitted by the orchestrator after the matching setter stamps the cycle. Persisted by <code>EventWriter</code>. Future external subscribers compose by listening here.</p>
+        </div>
+        <div class="col sage">
+          <div class="col-eyebrow">On rescue</div>
+          <h3>resolution_failed</h3>
+          <p>Emitted by the orchestrator and the job. Same payload shape: <code>cycle_id</code>, <code>audit_program_id</code>, <code>coder_id</code>, <code>error</code>, <code>message</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 WHAT ACTIVATES -->
+  <section class="slide" id="s11">
+    <header class="masthead">
+      <span class="slug">What activates</span>
+      <span class="title">AUD-730 · Hiring the Conductor</span>
+      <span class="pageno">No. 11 / 11</span>
+    </header>
+    <div class="well">
+      <h2 class="heading reveal">When this merges, the workflow <em>goes live.</em></h2>
+      <hr class="heading-rule reveal">
+      <p class="body reveal">From this point forward, every evaluation completed in a platform program walks the full pipeline. Cycles get created. Gates run. Above-threshold cycles auto-approve and auto-release without anyone clicking. Below-threshold cycles surface in the System Admin's approval queue (Jill, in our environment) for manual review.</p>
+      <p class="body reveal">The approval queue page already shipped. Until now it had no real data flowing in. After this merge, it has the actual production stream.</p>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  const deck = document.getElementById('deck');
+  const slides = Array.from(deck.querySelectorAll('.slide'));
+  const dotsContainer = document.getElementById('dots');
+  const progress = document.getElementById('progress-bar');
+  const hints = document.getElementById('hints');
+  const total = slides.length;
+
+  slides.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'dot';
+    b.setAttribute('aria-label', 'Slide ' + (i + 1));
+    b.addEventListener('click', () => slides[i].scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    dotsContainer.appendChild(b);
+  });
+  const dots = Array.from(dotsContainer.querySelectorAll('.dot'));
+
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      const idx = slides.indexOf(entry.target);
+      if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+        slides.forEach((s, i) => s.classList.toggle('visible', i === idx));
+        dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+        progress.style.width = ((idx + 1) / total * 100) + '%';
+      }
+    });
+  }, { root: deck, threshold: [0, 0.5, 1] });
+  slides.forEach((s) => io.observe(s));
+
+  slides[0].classList.add('visible');
+  dots[0].classList.add('active');
+
+  let scrolling = false;
+  const goTo = (idx) => {
+    if (idx < 0 || idx >= total || scrolling) return;
+    scrolling = true;
+    slides[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => { scrolling = false; }, 600);
+  };
+  const currentIndex = () => Math.round(deck.scrollTop / deck.clientHeight);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+      e.preventDefault(); goTo(currentIndex() + 1);
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      e.preventDefault(); goTo(currentIndex() - 1);
+    } else if (e.key === 'Home') { e.preventDefault(); goTo(0); }
+    else if (e.key === 'End') { e.preventDefault(); goTo(total - 1); }
+  });
+
+  let interacted = false;
+  const fadeHints = () => {
+    if (interacted) return;
+    interacted = true;
+    hints.classList.add('faded');
+  };
+  deck.addEventListener('scroll', fadeHints, { passive: true });
+  document.addEventListener('keydown', fadeHints, { once: true });
+  setTimeout(fadeHints, 6000);
+
+  deck.focus({ preventScroll: true });
+</script>
+</body>
+</html>
