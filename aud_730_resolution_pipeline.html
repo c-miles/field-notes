@@ -337,7 +337,7 @@
   /* ============ ROLE TRIO ============ */
   .trio {
     display: grid;
-    grid-template-columns: 1.3fr 1fr 1fr;
+    grid-template-columns: 1.3fr 1fr 1fr 1fr;
     gap: clamp(24px, 3vw, 44px);
   }
   .role {
@@ -498,7 +498,7 @@
       <p class="lede reveal">Three pull requests built an orchestra. Nobody had hired a conductor. AUD-730 is the appointment.</p>
       <div class="credits reveal">
         <span><span class="key">Pull request</span> &nbsp;AUD-730</span>
-        <span><span class="key">Built on</span> &nbsp;AUD-727 · 728 · 729</span>
+        <span><span class="key">Built on</span> &nbsp;AUD-727 · 728 · 729 · 755</span>
       </div>
     </div>
   </section>
@@ -541,7 +541,7 @@
       <span class="pageno">No. 04 / 11</span>
     </header>
     <div class="well">
-      <h2 class="heading reveal">Three commits. <em>One pipeline.</em></h2>
+      <h2 class="heading reveal">Four commits. <em>One pipeline.</em></h2>
       <hr class="heading-rule reveal">
       <div class="trio reveal">
         <div class="role lead">
@@ -558,6 +558,11 @@
           <div class="role-eyebrow">Commit 03</div>
           <div class="role-name">event_bus.rb</div>
           <div class="role-desc">Two lines that wire the handler to <code>evaluation.completed</code> and <code>evaluation.discarded</code>. Activation.</div>
+        </div>
+        <div class="role">
+          <div class="role-eyebrow">Commit 04</div>
+          <div class="role-name">Cycle attribution</div>
+          <div class="role-desc">Stamps <code>audit_program_cycle_id</code> on the audit and prefers it on the next pass. Future Add More audits land in their intended cycle.</div>
         </div>
       </div>
     </div>
@@ -586,7 +591,7 @@
       <span class="pageno">No. 06 / 11</span>
     </header>
     <div class="well">
-      <h2 class="heading reveal"><em>ResolutionHandlerJob</em> in five steps.</h2>
+      <h2 class="heading reveal"><em>ResolutionHandlerJob</em> in six steps.</h2>
       <hr class="heading-rule reveal">
       <div class="flow reveal">
         <div class="flow-row">
@@ -607,18 +612,25 @@
           <div class="flow-num">3</div>
           <div>
             <span class="flow-key">Find or create</span>
-            <span class="flow-desc">Race-safe cycle lookup keyed on <code>(audit_program, coder, period_key)</code>.</span>
+            <span class="flow-desc">Cycle lookup prefers the audit's <code>audit_program_cycle</code> FK. Falls back to a race-safe match on <code>(audit_program, coder, period_key)</code>.</span>
           </div>
         </div>
         <div class="flow-row">
           <div class="flow-num">4</div>
+          <div>
+            <span class="flow-key">Attribute</span>
+            <span class="flow-desc">Stamp <code>audit_program_cycle_id</code> on the audit so the next pass short-circuits the lookup. Idempotent via a nil guard.</span>
+          </div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-num">5</div>
           <div>
             <span class="flow-key">Attach</span>
             <span class="flow-desc">Race-safe join row creation linking this evaluation to the cycle.</span>
           </div>
         </div>
         <div class="flow-row">
-          <div class="flow-num">5</div>
+          <div class="flow-num">6</div>
           <div>
             <span class="flow-key">Resolve</span>
             <span class="flow-desc">Hand the cycle to <code>Orchestrator.call(cycle:)</code>. Verdicts get applied, events emit, the cycle settles or surfaces.</span>
@@ -675,7 +687,7 @@
       <span class="pageno">No. 08 / 11</span>
     </header>
     <div class="well">
-      <h2 class="heading reveal">Eight symbols. <em>Two that act,</em> six that don't.</h2>
+      <h2 class="heading reveal">Eight verdicts. <em>Two that act,</em> six that don't.</h2>
       <hr class="heading-rule reveal">
       <div class="matrix reveal">
         <div class="matrix-col">
