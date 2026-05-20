@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>AUD-791 - Web Components, as a Spike</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============ THEME: Engineer's Notebook ============
+   Warm paper cream as ground, deep ink-blue text, rust accent for the
+   load-bearing callouts and sage for the supporting ones. Newsreader
+   carries display work (variable optical-size axis lets the big titles
+   open up while subheads stay tight). Manrope handles body. JetBrains
+   Mono is the only mono. Grid pattern on the page background sits at
+   3% opacity so it reads as paper, not a screen. ============ */
+:root {
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+  --bg: #F2EDE2;
+  --bg-2: #ECE5D5;
+  --surface: #FFFDF7;
+  --surface-2: #FAF5E8;
+  --surface-3: #F4ECD8;
+
+  --grid-line: rgba(27, 45, 76, 0.05);
+  --border: rgba(27, 45, 76, 0.12);
+  --border-bright: rgba(27, 45, 76, 0.26);
+
+  --text: #1B2D4C;
+  --text-soft: #3F4F6A;
+  --text-dim: #6E7A8E;
+  --text-faint: #9CA5B5;
+
+  --accent: #C84B2C;
+  --accent-bright: #E25A36;
+  --accent-soft: rgba(200, 75, 44, 0.10);
+  --accent-wash: rgba(200, 75, 44, 0.05);
+
+  --sage: #5E7F4F;
+  --sage-soft: rgba(94, 127, 79, 0.10);
+  --mustard: #B8852A;
+  --mustard-soft: rgba(184, 133, 42, 0.12);
+  --steel: #4A6280;
+  --steel-soft: rgba(74, 98, 128, 0.10);
+
+  --code-bg: #1B2D4C;
+  --code-bg-2: #233754;
+  --code-border: rgba(255, 248, 226, 0.10);
+  --code-text: #F4ECD8;
+  --code-dim: #A8B5C9;
+  --kw: #E89E5C;
+  --str: #B3C97F;
+  --com: #7A8AA0;
+  --num: #DC8B6F;
+  --hl: rgba(232, 158, 92, 0.22);
+}
+
+* { box-sizing: border-box; min-width: 0; }
+*::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+.deck {
+  height: 100dvh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.slide {
+  height: 100dvh;
+  min-height: 640px;
+  scroll-snap-align: start;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(44px, 6vh, 80px) clamp(44px, 7vw, 120px);
+  isolation: isolate;
+  opacity: 0;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slide.visible { opacity: 1; }
+
+.slide::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.slide > * { position: relative; z-index: 1; }
+
+/* Opacity-only reveals. Once .visible is set on a slide the engine never
+   removes it, so flicking back and forward never catches an element
+   mid-fade or leaves it in a weird shifted state. */
+.reveal {
+  opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slide.visible .reveal { opacity: 1; }
+.slide.visible .reveal:nth-child(1)  { transition-delay: 0.05s; }
+.slide.visible .reveal:nth-child(2)  { transition-delay: 0.12s; }
+.slide.visible .reveal:nth-child(3)  { transition-delay: 0.19s; }
+.slide.visible .reveal:nth-child(4)  { transition-delay: 0.26s; }
+.slide.visible .reveal:nth-child(5)  { transition-delay: 0.33s; }
+.slide.visible .reveal:nth-child(6)  { transition-delay: 0.40s; }
+.slide.visible .reveal:nth-child(7)  { transition-delay: 0.47s; }
+.slide.visible .reveal:nth-child(8)  { transition-delay: 0.54s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .slide, .reveal {
+    opacity: 1 !important;
+    transition: none !important;
+  }
+}
+
+/* ============ TYPOGRAPHY ============ */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 1.1vw, 13px);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 2.6px;
+  color: var(--accent);
+  margin-bottom: clamp(14px, 2vh, 22px);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.kicker::before {
+  content: '';
+  width: 24px;
+  height: 1.5px;
+  background: var(--accent);
+}
+
+.display {
+  font-family: var(--font-display);
+  font-size: clamp(56px, 9vw, 128px);
+  font-weight: 500;
+  font-variation-settings: 'opsz' 72;
+  line-height: 0.96;
+  letter-spacing: -2.5px;
+  color: var(--text);
+  text-wrap: balance;
+}
+.display em {
+  font-style: italic;
+  color: var(--accent);
+  font-variation-settings: 'opsz' 72;
+}
+
+.heading {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 5.6vw, 68px);
+  font-weight: 500;
+  font-variation-settings: 'opsz' 60;
+  line-height: 1.04;
+  letter-spacing: -1.4px;
+  color: var(--text);
+  text-wrap: balance;
+}
+.heading em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.subtitle {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(20px, 2.6vw, 28px);
+  font-variation-settings: 'opsz' 24;
+  line-height: 1.36;
+  color: var(--text-soft);
+  text-wrap: pretty;
+}
+
+.body {
+  font-size: clamp(15px, 1.4vw, 19px);
+  line-height: 1.62;
+  color: var(--text-soft);
+  text-wrap: pretty;
+}
+.body strong { color: var(--text); font-weight: 600; }
+.body code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1.5px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.note {
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 1.05vw, 13px);
+  color: var(--text-dim);
+  letter-spacing: 0.4px;
+}
+
+/* ============ TITLE SLIDE ============ */
+.slide--title {
+  justify-content: center;
+  align-items: flex-start;
+}
+.slide--title .display { max-width: 22ch; }
+.slide--title .sub {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(22px, 3vw, 34px);
+  font-variation-settings: 'opsz' 24;
+  color: var(--text-soft);
+  margin-top: clamp(20px, 3vh, 32px);
+  max-width: 38ch;
+  line-height: 1.34;
+}
+.slide--title .stamp {
+  position: absolute;
+  bottom: clamp(40px, 5vh, 64px);
+  left: clamp(44px, 7vw, 120px);
+  right: clamp(44px, 7vw, 120px);
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--text-dim);
+}
+.slide--title .stamp .accent { color: var(--accent); font-weight: 700; }
+
+.slide--title::after {
+  content: '';
+  position: absolute;
+  top: clamp(44px, 6vh, 80px);
+  right: clamp(44px, 7vw, 120px);
+  width: 96px;
+  height: 96px;
+  border: 1.5px solid var(--border-bright);
+  border-radius: 50%;
+  z-index: 0;
+}
+
+/* ============ LAYOUTS ============ */
+.lede {
+  max-width: 36ch;
+  margin-bottom: clamp(20px, 3vh, 32px);
+}
+.lede .heading { margin-bottom: clamp(14px, 2vh, 22px); }
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(32px, 4vw, 56px);
+  align-items: start;
+}
+.three-col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(20px, 2.5vw, 32px);
+  align-items: stretch;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  padding: clamp(20px, 2.4vw, 28px);
+  position: relative;
+}
+.panel--accent { border-color: var(--accent); }
+.panel--sage { border-color: var(--sage); }
+.panel--steel { border-color: var(--steel); }
+.panel--mustard { border-color: var(--mustard); }
+
+.panel__tag {
+  position: absolute;
+  top: -10px;
+  left: 18px;
+  background: var(--bg);
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  color: var(--accent);
+}
+.panel--sage .panel__tag { color: var(--sage); }
+.panel--steel .panel__tag { color: var(--steel); }
+.panel--mustard .panel__tag { color: var(--mustard); }
+
+.panel__title {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.2vw, 28px);
+  font-weight: 500;
+  font-variation-settings: 'opsz' 24;
+  letter-spacing: -0.4px;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+
+.panel__body {
+  font-size: clamp(14px, 1.25vw, 16px);
+  line-height: 1.6;
+  color: var(--text-soft);
+}
+.panel__body code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.panel__body strong { color: var(--text); font-weight: 600; }
+
+.list-clean {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.list-clean li {
+  padding: 6px 0 6px 22px;
+  position: relative;
+  font-size: clamp(14px, 1.25vw, 16px);
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+.list-clean li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 16px;
+  width: 12px;
+  height: 1.5px;
+  background: var(--accent);
+}
+.panel--sage .list-clean li::before { background: var(--sage); }
+.panel--steel .list-clean li::before { background: var(--steel); }
+.panel--mustard .list-clean li::before { background: var(--mustard); }
+.list-clean li strong { color: var(--text); font-weight: 600; }
+.list-clean li code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.panel--sage .list-clean li code { color: var(--sage); background: var(--sage-soft); }
+.panel--steel .list-clean li code { color: var(--steel); background: var(--steel-soft); }
+.panel--mustard .list-clean li code { color: var(--mustard); background: var(--mustard-soft); }
+
+/* ============ CODE BLOCKS ============ */
+.codeblock {
+  background: var(--code-bg);
+  border-radius: 4px;
+  border: 1px solid var(--code-border);
+  overflow: hidden;
+  margin: 0;
+  box-shadow: 0 12px 32px -16px rgba(27, 45, 76, 0.35);
+}
+.codeblock__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  background: var(--code-bg-2);
+  border-bottom: 1px solid var(--code-border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  color: var(--code-dim);
+}
+.codeblock__head .label {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  color: var(--code-dim);
+  opacity: 0.7;
+}
+.codeblock__body {
+  font-family: var(--font-mono);
+  font-size: clamp(11.5px, 1vw, 13.5px);
+  line-height: 1.65;
+  padding: 16px 20px;
+  color: var(--code-text);
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0;
+}
+.codeblock__body .kw { color: var(--kw); font-weight: 500; }
+.codeblock__body .str { color: var(--str); }
+.codeblock__body .com { color: var(--com); font-style: italic; }
+.codeblock__body .num { color: var(--num); }
+.codeblock__body .hl { background: var(--hl); border-radius: 3px; padding: 0 3px; }
+
+/* ============ DIAGRAMS ============ */
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.flow__row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.flow__box {
+  flex: 1;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  padding: 14px 18px;
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 1vw, 13px);
+  color: var(--text);
+  position: relative;
+}
+/* Solid paper-white background on all variants so the page grid never
+   shows through and steals readability. Variants distinguish via the
+   border weight and a colored corner tab (the lbl line picks up the
+   accent below). */
+.flow__box--accent { border-color: var(--accent); border-width: 2px; }
+.flow__box--sage { border-color: var(--sage); border-width: 2px; }
+.flow__box--steel { border-color: var(--steel); border-width: 2px; }
+.flow__box--accent .flow__box__lbl { color: var(--accent); }
+.flow__box--sage .flow__box__lbl { color: var(--sage); }
+.flow__box--steel .flow__box__lbl { color: var(--steel); }
+.flow__box__lbl {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.flow__box__main {
+  color: var(--text);
+  font-weight: 500;
+}
+.flow__box__sub {
+  color: var(--text-dim);
+  font-size: 0.85em;
+  margin-top: 4px;
+}
+.flow__arrow {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.flow__arrow--down {
+  align-self: center;
+  font-size: 26px;
+  line-height: 1;
+}
+
+/* ============ COMPARE PANEL ============ */
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.compare__head {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  padding: 12px 18px;
+  border-bottom: 2px solid;
+}
+.compare__head--before {
+  background: rgba(200, 75, 44, 0.06);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.compare__head--after {
+  background: rgba(94, 127, 79, 0.08);
+  color: var(--sage);
+  border-bottom-color: var(--sage);
+}
+.compare__body {
+  padding: 18px 20px;
+  font-size: clamp(13px, 1.15vw, 15px);
+  line-height: 1.6;
+  color: var(--text-soft);
+}
+.compare__body strong { color: var(--text); font-weight: 600; }
+.compare__body code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--steel-soft);
+  color: var(--steel);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.compare__body--left { border-right: 1px solid var(--border); }
+
+/* ============ CHROME ============ */
+.deck-progress {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  background: var(--accent);
+  z-index: 10;
+  transition: width 0.32s ease;
+  width: 0;
+}
+.deck-dots {
+  position: fixed;
+  right: clamp(20px, 2.4vw, 32px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  z-index: 10;
+}
+.deck-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-bright);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.deck-dot.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.18);
+}
+.deck-dot:hover { border-color: var(--accent); }
+
+.deck-counter {
+  position: fixed;
+  bottom: clamp(22px, 2.6vh, 32px);
+  right: clamp(22px, 2.6vw, 32px);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.8px;
+  color: var(--text-dim);
+  z-index: 10;
+}
+.deck-counter .accent { color: var(--accent); font-weight: 700; }
+
+.deck-hints {
+  position: fixed;
+  bottom: clamp(22px, 2.6vh, 32px);
+  left: clamp(22px, 2.6vw, 32px);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  color: var(--text-dim);
+  z-index: 10;
+  text-transform: uppercase;
+  transition: opacity 0.6s ease;
+}
+.deck-hints.faded { opacity: 0; }
+
+@media (max-width: 760px) {
+  .slide { padding: clamp(28px, 5vh, 48px) clamp(24px, 5vw, 44px); }
+  .two-col, .three-col { grid-template-columns: 1fr; gap: 20px; }
+  .compare { grid-template-columns: 1fr; }
+  .compare__body--left { border-right: none; border-bottom: 1px solid var(--border); }
+  .deck-dots { display: none; }
+  .flow__row { flex-direction: column; align-items: stretch; }
+  .flow__arrow { transform: rotate(90deg); align-self: center; }
+}
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- ===== 01 — TITLE ===== -->
+<section class="slide slide--title">
+  <div class="kicker reveal">AUD-791 / Audit · Platform</div>
+  <h1 class="display reveal">Web components, <em>as a spike.</em></h1>
+  <p class="sub reveal">An evaluation of how Audit hands a slice of itself to Platform without giving up ownership of either the data or how it's drawn.</p>
+  <div class="stamp">
+    <span><span class="accent">field notes</span> &nbsp; · &nbsp; engineering</span>
+    <span>2026</span>
+  </div>
+</section>
+
+<!-- ===== 02 — WHY ===== -->
+<section class="slide">
+  <div class="kicker reveal">01 / Why this exists</div>
+  <h2 class="heading reveal" style="max-width: 18ch;">The arrow has only ever pointed one way.</h2>
+  <div class="two-col" style="margin-top: clamp(24px, 4vh, 40px);">
+    <div class="reveal">
+      <p class="body">Until now, the Audit / Platform integration has run in a single direction. Platform sends us coders, charts, and team data. We ingest it, react, do audit work, and emit events. Platform does not read anything back.</p>
+      <p class="body" style="margin-top: 16px;">This is the <strong>first time</strong> Platform needs to read a surface from us. The question on the table is the integration shape.</p>
+    </div>
+    <div class="reveal">
+      <div class="panel panel--accent">
+        <span class="panel__tag">The Goal</span>
+        <h3 class="panel__title">A hard line, both ways</h3>
+        <p class="panel__body">Audit owns the data. Audit owns how it's drawn. Platform owns only the page wrapped around it. No JSON ingestion, no parallel ERB, no mirrored data model.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 03 — CUSTOM ELEMENTS 101 ===== -->
+<section class="slide">
+  <div class="kicker reveal">02 / The Primitive</div>
+  <h2 class="heading reveal"><em>Custom elements</em> are a browser native.</h2>
+  <div class="two-col reveal" style="margin-top: clamp(20px, 3vh, 32px);">
+    <div>
+      <p class="body">A web component is a class that extends <code>HTMLElement</code> and is registered to a tag name. The browser handles the rest. There is no framework, no runtime, no SPA. Three lifecycle moments matter for us.</p>
+      <ul class="list-clean" style="margin-top: 18px;">
+        <li><strong>constructor</strong> &mdash; the instance is allocated, the shadow root attaches</li>
+        <li><strong>connectedCallback</strong> &mdash; the element joins the DOM, we kick off the first fetch</li>
+        <li><strong>attributeChangedCallback</strong> &mdash; an observed attribute changed, refetch if needed</li>
+      </ul>
+      <p class="note" style="margin-top: 18px;"><a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">MDN: Using custom elements</a></p>
+    </div>
+    <div>
+      <div class="codeblock">
+        <div class="codeblock__head">
+          <span>register the tag</span>
+          <span class="label">js</span>
+        </div>
+        <pre class="codeblock__body"><span class="kw">class</span> AuditApprovalQueue <span class="kw">extends</span> HTMLElement {
+  <span class="kw">constructor</span>() {
+    <span class="kw">super</span>();
+    <span class="kw">this</span>.<span class="kw">attachShadow</span>({ mode: <span class="str">"open"</span> });
+  }
+  <span class="kw">connectedCallback</span>() {
+    <span class="kw">this</span>.<span class="kw">loadQueue</span>();
+  }
+}
+
+customElements.<span class="kw">define</span>(
+  <span class="str">"audit-approval-queue"</span>,
+  AuditApprovalQueue
+);</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 04 — WHAT WE SHIPPED ===== -->
+<section class="slide">
+  <div class="kicker reveal">03 / The Artifact</div>
+  <h2 class="heading reveal" style="max-width: 24ch;">One job <em>per tag.</em></h2>
+  <p class="subtitle reveal" style="margin-top: 18px; max-width: 50ch;">Each custom element renders one surface. Pages on Platform compose them. Navigation between surfaces is Platform's job, not the component's.</p>
+  <div class="three-col reveal" style="margin-top: clamp(26px, 4vh, 40px);">
+    <div class="panel panel--accent">
+      <span class="panel__tag">In this PR</span>
+      <h3 class="panel__title" style="font-family: var(--font-mono); font-size: clamp(15px, 1.5vw, 18px); letter-spacing: -0.3px;">&lt;audit-approval&#8209;queue&gt;</h3>
+      <p class="panel__body">Renders Audit's external approval queue. Read-only list of cycles awaiting Platform review. The spike happens to include an internal queue-to-detail view too, but that's a spike convenience, not the production shape.</p>
+    </div>
+    <div class="panel panel--steel">
+      <span class="panel__tag">In real life</span>
+      <h3 class="panel__title">A small fleet</h3>
+      <p class="panel__body">Each surface gets its own tag. A queue component on the queue page, a separate detail component on the detail page, dispute review on its own page, and so on. Platform's router decides which page is which.</p>
+    </div>
+    <div class="panel panel--sage">
+      <span class="panel__tag">The contract</span>
+      <h3 class="panel__title">Events out, attrs in</h3>
+      <p class="panel__body">Click <em>View</em> on a row, the queue dispatches <code>cycle-selected</code> with the id. Platform listens, navigates to its detail page, that page embeds the detail component with the id as an attribute. Components stay independent.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 05 — BOOT SEQUENCE ===== -->
+<section class="slide">
+  <div class="kicker reveal">04 / Boot Sequence</div>
+  <h2 class="heading reveal">What happens when the page loads.</h2>
+  <div class="flow reveal" style="margin-top: clamp(24px, 3.6vh, 36px);">
+    <div class="flow__row">
+      <div class="flow__box flow__box--steel">
+        <div class="flow__box__lbl">Step 01</div>
+        <div class="flow__box__main">Platform renders its page</div>
+        <div class="flow__box__sub">&lt;script src&gt; pointing at Audit, plus &lt;audit-approval-queue&gt; in the markup</div>
+      </div>
+      <span class="flow__arrow">&rarr;</span>
+      <div class="flow__box">
+        <div class="flow__box__lbl">Step 02</div>
+        <div class="flow__box__main">Browser fetches the bundle</div>
+        <div class="flow__box__sub">audit.kodehealth.com/audit-components/v1/audit-approval-queue.js</div>
+      </div>
+    </div>
+    <div class="flow__row">
+      <div class="flow__box">
+        <div class="flow__box__lbl">Step 03</div>
+        <div class="flow__box__main">The IIFE runs immediately</div>
+        <div class="flow__box__sub">customElements.define("audit-approval-queue", &hellip;)</div>
+      </div>
+      <span class="flow__arrow">&rarr;</span>
+      <div class="flow__box flow__box--accent">
+        <div class="flow__box__lbl">Step 04</div>
+        <div class="flow__box__main">Every matching tag upgrades</div>
+        <div class="flow__box__sub">constructor &rarr; attachShadow &rarr; connectedCallback</div>
+      </div>
+    </div>
+    <div class="flow__row">
+      <div class="flow__box flow__box--sage">
+        <div class="flow__box__lbl">Step 05</div>
+        <div class="flow__box__main">connectedCallback &rarr; loadQueue()</div>
+        <div class="flow__box__sub">fetch(/api/v1/components/approval_cycles), inject HTML fragment into the shadow root</div>
+      </div>
+    </div>
+  </div>
+  <p class="note reveal" style="margin-top: 20px;">Custom elements upgrade automatically, even if the script defines the class AFTER the tag is already in the document. Order does not matter.</p>
+</section>
+
+<!-- ===== 06 — SHADOW DOM ===== -->
+<section class="slide">
+  <div class="kicker reveal">05 / The Wall</div>
+  <h2 class="heading reveal" style="max-width: 22ch;">Shadow DOM, <em>open mode.</em></h2>
+  <p class="subtitle reveal" style="margin-top: 18px; max-width: 56ch;">An isolated DOM subtree attached to our element. Platform's stylesheet can't reach in, Platform's JS can't <code>querySelector</code> us, and inherited properties like <code>font-family</code> still flow down from the host page.</p>
+  <div class="three-col reveal" style="margin-top: clamp(22px, 3vh, 32px);">
+    <div class="panel panel--accent">
+      <span class="panel__tag">What we chose</span>
+      <h3 class="panel__title">Open Shadow DOM</h3>
+      <p class="panel__body">Our class names (<code>c-card</code>, <code>c-btn</code>) live in their own scope and won't collide with Platform's overlapping ones. Host code can still introspect via <code>element.shadowRoot</code>, which is useful for integration tests.</p>
+    </div>
+    <div class="panel panel--steel">
+      <span class="panel__tag">Considered</span>
+      <h3 class="panel__title">Closed Shadow DOM</h3>
+      <p class="panel__body">Same isolation, but <code>element.shadowRoot</code> returns null externally. No real security benefit here (the bundle is public, attributes are readable), and it makes debugging and tests harder. Not worth the tradeoff.</p>
+    </div>
+    <div class="panel panel--steel">
+      <span class="panel__tag">Considered</span>
+      <h3 class="panel__title">Light DOM (no shadow)</h3>
+      <p class="panel__body">Render straight into Platform's tree. Inherits Platform's CSS, which is great when you <em>want</em> host theming and bad when you have overlapping class names. Live option if we ever decide Platform should style us.</p>
+    </div>
+  </div>
+  <p class="note reveal" style="margin-top: 18px;">Future hook: CSS shadow parts (<code>::part()</code>) let us selectively expose stylable bits to Platform without giving up the wall. &mdash; <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_shadow_DOM" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">MDN: Using shadow DOM</a></p>
+</section>
+
+<!-- ===== 07 — CROSSING THE WALL ===== -->
+<section class="slide">
+  <div class="kicker reveal">06 / Crossing the Wall</div>
+  <h2 class="heading reveal" style="max-width: 24ch;">Events leave the shadow root <em>only if you say so.</em></h2>
+  <div class="two-col" style="margin-top: clamp(24px, 3.4vh, 36px);">
+    <div class="reveal">
+      <p class="body">By default an event fired inside a shadow root does not escape to the host page. To let Platform's Stimulus controller hear us, we set <code>composed: true</code>.</p>
+      <p class="body" style="margin-top: 14px;"><code>bubbles: true</code> alone only bubbles within the shadow root. <code>composed: true</code> is the magic flag that lets the event cross into the parent tree where Platform's listeners live.</p>
+      <p class="body" style="margin-top: 14px;">Two events leave the wall: <code>cycle-selected</code> when a user clicks View on a row, <code>cycle-cleared</code> when they click Back. Platform listens, Platform reacts.</p>
+      <p class="note" style="margin-top: 18px;"><a href="https://developer.mozilla.org/en-US/docs/Web/API/Event/composed" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">MDN: Event.composed</a></p>
+    </div>
+    <div class="reveal">
+      <div class="codeblock">
+        <div class="codeblock__head">
+          <span>dispatch a composed event</span>
+          <span class="label">js</span>
+        </div>
+        <pre class="codeblock__body"><span class="kw">this</span>.<span class="kw">dispatchEvent</span>(
+  <span class="kw">new</span> CustomEvent(<span class="str">"cycle-selected"</span>, {
+    detail: { cycleId },
+    bubbles: <span class="kw">true</span>,
+    <span class="hl">composed: <span class="kw">true</span></span>  <span class="com">// crosses the boundary</span>
+  })
+);</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 08 — ONE FILE DELIVERY ===== -->
+<section class="slide">
+  <div class="kicker reveal">07 / The Bundle</div>
+  <h2 class="heading reveal" style="max-width: 22ch;">One file. <em>One request.</em></h2>
+  <div class="two-col" style="margin-top: clamp(20px, 3vh, 32px);">
+    <div class="reveal">
+      <p class="body">The component source imports a Tailwind CSS file as a string. esbuild's <code>--loader:.css=text</code> flag turns the import into a literal JS string at build time. The compiled CSS lives inside the JS bundle.</p>
+      <p class="body" style="margin-top: 14px;">At runtime the component injects it as an inline <code>&lt;style&gt;</code> in the shadow root. No separate stylesheet to host, no second HTTP request, no version skew between the JS and the CSS that styles it.</p>
+      <p class="body" style="margin-top: 14px;">This is the pattern Stripe Elements, Intercom, and Lit's <code>static styles</code> all use. The right shape for shipping a third-party embed.</p>
+    </div>
+    <div class="reveal">
+      <div class="codeblock">
+        <div class="codeblock__head">
+          <span>the pipeline, in two steps</span>
+          <span class="label">sh</span>
+        </div>
+        <pre class="codeblock__body"><span class="com"># 1. Tailwind compiles a scoped CSS file</span>
+tailwindcss \
+  -i app/assets/tailwind/audit_components.css \
+  -o app/javascript/components/styles.css
+
+<span class="com"># 2. esbuild bundles the JS and inlines the CSS</span>
+<span class="com">#    as a JS string constant</span>
+npx esbuild app/javascript/components/audit_approval_queue.js \
+  --bundle --format=iife \
+  <span class="hl">--loader:.css=text</span> \
+  --outfile=public/audit-components/v1/audit-approval-queue.js</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 09 — WHERE IT LIVES ===== -->
+<section class="slide">
+  <div class="kicker reveal">08 / Delivery</div>
+  <h2 class="heading reveal">The bundle is a <em>static file</em>.</h2>
+  <div class="two-col reveal" style="margin-top: clamp(22px, 3vh, 36px);">
+    <div>
+      <p class="body">The compiled bundle lands in <code>public/audit-components/v1/</code>. Rails' static-file middleware serves it directly. No controller runs. No auth check fires. Same delivery model as a logo PNG or jQuery's CDN.</p>
+      <p class="body" style="margin-top: 14px;">Anyone with the URL can fetch it. Right now nothing sensitive lives in the bundle, just the component class and the inlined CSS. No API keys, no user data, no secrets baked in.</p>
+      <p class="body" style="margin-top: 14px;">If a future component ever needs to ship something we'd rather not hand out anonymously, the bundle stops being the right place for it. Access control belongs one layer down, on the data endpoints the bundle calls.</p>
+    </div>
+    <div>
+      <div class="panel panel--mustard">
+        <span class="panel__tag">Worth keeping in mind</span>
+        <h3 class="panel__title">Public by default.</h3>
+        <p class="panel__body">Anything that lands in <code>public/</code> is fetchable from the open internet. That works for component code because the code is supposed to be readable. It would not work for credentials, user data, or business logic we'd want to keep proprietary.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 10 — VERSIONING ===== -->
+<section class="slide">
+  <div class="kicker reveal">09 / Versioning</div>
+  <h2 class="heading reveal" style="max-width: 20ch;">Path-versioned. <em>Short-cached.</em></h2>
+  <div class="two-col" style="margin-top: clamp(22px, 3vh, 36px);">
+    <div class="reveal">
+      <p class="body">The URL is mutable: <code>/audit-components/v1/audit-approval-queue.js</code> always points at the current build. We bump to <code>/v2/</code> only when the external contract changes &mdash; tag name, attribute names, dispatched event names.</p>
+      <p class="body" style="margin-top: 14px;">A Rack middleware caps Cache-Control at one minute with stale-while-revalidate for five. Rails' default year-long cache on the public directory would have left embedders stuck on the pre-deploy bundle.</p>
+      <p class="body" style="margin-top: 14px;">A diagnostic <code>version.json</code> sidecar carries the git SHA so anyone can curl and know what's deployed.</p>
+    </div>
+    <div class="reveal">
+      <div class="codeblock">
+        <div class="codeblock__head">
+          <span>Cache-Control response header</span>
+          <span class="label">http</span>
+        </div>
+        <pre class="codeblock__body"><span class="kw">Cache-Control:</span> public,
+               <span class="hl">max-age=60</span>,
+               <span class="hl">stale-while-revalidate=300</span></pre>
+      </div>
+      <p class="note" style="margin-top: 18px;">Browsers serve the cached copy immediately and revalidate in the background. A fresh deploy reaches users within roughly one minute, with no latency penalty during the revalidation window.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 11 — VERSIONING PATHS NOT TAKEN ===== -->
+<section class="slide">
+  <div class="kicker reveal">10 / Versioning, paths not taken</div>
+  <h2 class="heading reveal">Alternatives <em>still on the table.</em></h2>
+  <div class="three-col reveal" style="margin-top: clamp(20px, 3vh, 32px);">
+    <div class="panel panel--mustard">
+      <span class="panel__tag">Likely future</span>
+      <h3 class="panel__title" style="font-size: clamp(17px, 1.7vw, 22px);">Manifest endpoint</h3>
+      <p class="panel__body" style="margin-top: 4px;">JSON that points at the current bundle URLs for each component. Pays off once we ship a fleet. Lets Platform load components by name without caring about path conventions. Probably the answer when this becomes three or more components.</p>
+    </div>
+    <div class="panel panel--steel">
+      <span class="panel__tag">Considered</span>
+      <h3 class="panel__title" style="font-size: clamp(17px, 1.7vw, 22px);">Hash filenames</h3>
+      <p class="panel__body" style="margin-top: 4px;">Cache-forever fingerprinted assets. Excellent caching but Platform would have to discover the current hash on every render. Better as a downstream chunk fetched by a small loader than as the entry point.</p>
+    </div>
+    <div class="panel panel--steel">
+      <span class="panel__tag">Considered</span>
+      <h3 class="panel__title" style="font-size: clamp(17px, 1.7vw, 22px);">Semver in path</h3>
+      <p class="panel__body" style="margin-top: 4px;">e.g. <code>/1.2.3/embed.js</code>. Right shape for shipping a library to many third-party consumers with release-train coordination. Overkill for one internal team.</p>
+    </div>
+    <div class="panel panel--steel">
+      <span class="panel__tag">Considered</span>
+      <h3 class="panel__title" style="font-size: clamp(17px, 1.7vw, 22px);">npm package</h3>
+      <p class="panel__body" style="margin-top: 4px;">Platform installs the component as a build-time dep, lockfile pins the version. Right end-state once the contract stabilizes. Wrong during active spike work, where every component tweak would become a publish + Platform deploy.</p>
+    </div>
+    <div class="panel panel--steel">
+      <span class="panel__tag">Considered</span>
+      <h3 class="panel__title" style="font-size: clamp(17px, 1.7vw, 22px);">Separate repo</h3>
+      <p class="panel__body" style="margin-top: 4px;">Conflates ownership boundary with versioning. Adds CI / Dependabot / review-cycle cost. None of the conditions that justify a split (multiple consumers, different release cadence, different team) currently hold.</p>
+    </div>
+    <div class="panel panel--accent">
+      <span class="panel__tag">What we chose, why</span>
+      <h3 class="panel__title" style="font-size: clamp(17px, 1.7vw, 22px);">Mutable <code>/v1/</code></h3>
+      <p class="panel__body" style="margin-top: 4px;">Ships first, stays out of the way fastest, leaves a clean migration path to manifest + npm later. The 60-second cache window plus the version sidecar covers the staleness concern that drove the question.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 12 — CORS ===== -->
+<section class="slide">
+  <div class="kicker reveal">11 / CORS, briefly</div>
+  <h2 class="heading reveal">Two origins, one rule the browser <em>refuses to forget.</em></h2>
+  <div class="two-col reveal" style="margin-top: clamp(22px, 3vh, 36px);">
+    <div>
+      <p class="body">A page from <code>app.kodehealth.com</code> cannot, by default, <code>fetch()</code> <code>audit.kodehealth.com</code> and read the response. That's the Same-Origin Policy. CORS is the protocol the target server uses to opt in.</p>
+      <p class="body" style="margin-top: 14px;">Our component sets a custom <code>Authorization</code> header. Custom headers trigger a preflight: the browser sends an <code>OPTIONS</code> first to ask permission, then the real request if Audit said yes.</p>
+    </div>
+    <div>
+      <div class="panel panel--accent">
+        <span class="panel__tag">What we configured</span>
+        <ul class="list-clean" style="margin-top: 4px;">
+          <li>Origin allowlist sourced from a single env var (<code>CORS_ALLOWED_ORIGINS</code>), per environment</li>
+          <li>Scoped to <code>/api/v1/components/</code> only &mdash; the only browser-callable surface</li>
+          <li>Catch-all <code>OPTIONS</code> route inside that namespace handles all preflights</li>
+          <li>24-hour max-age so preflights cache and repeat fetches skip the round trip</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <p class="note reveal" style="margin-top: 20px;"><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">MDN: Cross-Origin Resource Sharing</a></p>
+</section>
+
+<!-- ===== 13 — AUTH MODEL ===== -->
+<section class="slide">
+  <div class="kicker reveal">12 / Authorization</div>
+  <h2 class="heading reveal" style="max-width: 22ch;">Platform <em>mints.</em> Audit <em>verifies.</em></h2>
+  <div class="two-col reveal" style="margin-top: clamp(22px, 3vh, 36px);">
+    <div>
+      <p class="body">Platform mints a short-lived HS256 JWT for the current user at page render. The component sends it as <code>Authorization: Bearer</code> on every fetch. Audit verifies the signature, the issuer, the audience, and the expiry before acting on anything in the claim.</p>
+      <p class="body" style="margin-top: 14px;">User identity and role both ride in the verified payload. The approve endpoint stamps <code>external_reviewer_id</code> from the verified <code>sub</code> rather than trusting a body field a caller could lie about.</p>
+    </div>
+    <div>
+      <ul class="list-clean">
+        <li><strong>Per-user, not per-app</strong> &mdash; Audit knows which person acted</li>
+        <li><strong>Role rides in the claim</strong> &mdash; no cross-app user table lookup on Audit's side</li>
+        <li><strong>Expires in 30 minutes</strong> &mdash; short window mitigates token-leak replay without needing a denylist</li>
+        <li><strong>Audience-bound</strong> &mdash; the token is usable only for the named verifier</li>
+        <li><strong>Rotates via a key id header</strong> &mdash; no JWKS endpoint needed for the symmetric case</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 14 — JWT SHAPE ===== -->
+<section class="slide">
+  <div class="kicker reveal">13 / The JWT, up close</div>
+  <h2 class="heading reveal"><em>HS256.</em> Same shape Shopify embedded apps use.</h2>
+  <div class="two-col" style="margin-top: clamp(20px, 3vh, 32px);">
+    <div class="reveal">
+      <p class="body">Both apps share an HS256 signing secret via Rails credentials. Platform signs, Audit verifies. No JWKS endpoint, no asymmetric ceremony, no IdP round trip. Two services under one company, same shared infrastructure.</p>
+      <p class="body" style="margin-top: 14px;">Audit's verifier enforces an issuer allowlist, the audience claim, and exp (with 30 seconds of clock skew tolerance). No email or other PII rides in the payload.</p>
+    </div>
+    <div class="reveal">
+      <div class="codeblock">
+        <div class="codeblock__head">
+          <span>verified payload</span>
+          <span class="label">jwt</span>
+        </div>
+        <pre class="codeblock__body">{
+  <span class="str">"iss"</span>: <span class="str">"app.kodehealth.com"</span>,
+  <span class="str">"aud"</span>: <span class="str">"audit.kodehealth.com"</span>,
+  <span class="str">"sub"</span>: <span class="str">"42"</span>,
+  <span class="str">"role"</span>: <span class="str">"system_admin"</span>,
+  <span class="str">"roles"</span>: [<span class="str">"system_admin"</span>, <span class="str">"staff"</span>],
+  <span class="str">"exp"</span>: <span class="num">1779310032</span>,
+  <span class="str">"iat"</span>: <span class="num">1779308232</span>,
+  <span class="str">"jti"</span>: <span class="str">"e158827c-6b22-413e-..."</span>
+}
+<span class="com">// header carries kid: "v1" for rotation</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 15 — JWT PATHS NOT TAKEN ===== -->
+<section class="slide">
+  <div class="kicker reveal">14 / Auth, paths not taken</div>
+  <h2 class="heading reveal">Other shapes that were on the table.</h2>
+  <div class="three-col reveal" style="margin-top: clamp(20px, 3vh, 32px);">
+    <div class="panel panel--steel">
+      <span class="panel__tag">Intercom HMAC</span>
+      <p class="panel__body" style="margin-top: 4px;"><code>user_hash = HMAC(user_id, secret)</code>. The minimum-viable upgrade from a shared key. But no expiry, no audience, no per-user revocation. Intercom themselves now deprecate it for JWT, for the same reasons.</p>
+    </div>
+    <div class="panel panel--steel">
+      <span class="panel__tag">Stripe ephemeral keys</span>
+      <p class="panel__body" style="margin-top: 4px;">Three-tier publishable / secret / session-token hierarchy. Correct for untrusted third-party merchants. Cosplay for two same-company Rails apps.</p>
+    </div>
+    <div class="panel panel--steel">
+      <span class="panel__tag">OAuth Token Exchange</span>
+      <p class="panel__body" style="margin-top: 4px;">RFC 8693. The architecturally pure answer when both apps share an IdP. Right end state. Requires registering Audit's API as a Logto resource and putting access tokens in front of every Platform session first &mdash; not the right next step.</p>
+    </div>
+  </div>
+  <p class="note reveal" style="margin-top: 22px;">Migration path stays open: the wire format is JWT. Swapping a Platform-minted JWT for a Logto-issued one later does not touch the component or Audit's verifier. &mdash; <a href="https://www.rfc-editor.org/rfc/rfc7519" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">RFC 7519: JSON Web Token</a></p>
+</section>
+
+<!-- ===== 16 — VERDICT ===== -->
+<section class="slide">
+  <div class="kicker reveal">15 / Verdict</div>
+  <h2 class="heading reveal">What this spike shows, and what it leaves open.</h2>
+  <div class="two-col reveal" style="margin-top: clamp(22px, 3vh, 36px);">
+    <div class="panel panel--sage">
+      <span class="panel__tag">What's working</span>
+      <ul class="list-clean">
+        <li>End-to-end round trip is fast and the rendered surface matches admin pixel-for-pixel</li>
+        <li>Platform owns zero data model. No JSON ingestion, no parallel ERB</li>
+        <li>Build pipeline is one rake task and one middleware. Heroku release does the rest</li>
+        <li>Auth carries a verified user identity and a role claim Audit acts on</li>
+        <li>Migration path to npm distribution and OAuth Token Exchange stays open</li>
+      </ul>
+    </div>
+    <div class="panel panel--mustard">
+      <span class="panel__tag">Worth deciding</span>
+      <ul class="list-clean">
+        <li>When the third component arrives, decide between inline-CSS-per-bundle and a single shared stylesheet</li>
+        <li>When the contract stabilizes, decide between mutable <code>/v1/</code> and an npm-distributed package</li>
+        <li>If a third sibling app shows up, move from pairwise shared secrets to a Logto-mediated token exchange</li>
+        <li>Production rollout: rotate the shared secret out of dev fallback into Rails credentials proper</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 17 — COLOPHON ===== -->
+<section class="slide slide--title" style="justify-content: center;">
+  <div class="kicker reveal">End</div>
+  <h2 class="display reveal" style="max-width: 20ch; font-size: clamp(48px, 7vw, 96px);">A small <em>tag.</em> A clear line.</h2>
+  <p class="sub reveal" style="margin-top: clamp(20px, 3vh, 32px); max-width: 40ch;">Platform got a surface. Audit kept everything that makes it ours.</p>
+  <div class="stamp">
+    <span><span class="accent">field notes</span> &nbsp; · &nbsp; engineering</span>
+    <span>AUD-791</span>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function() {
+  class SlideEngine {
+    constructor() {
+      this.deck = document.querySelector('.deck');
+      this.slides = Array.from(document.querySelectorAll('.slide'));
+      this.current = 0;
+      this.total = this.slides.length;
+      this.buildChrome();
+      this.bindEvents();
+      this.observe();
+      this.update();
+    }
+
+    buildChrome() {
+      const bar = document.createElement('div');
+      bar.className = 'deck-progress';
+      document.body.appendChild(bar);
+      this.bar = bar;
+
+      const dots = document.createElement('div');
+      dots.className = 'deck-dots';
+      this.slides.forEach((_, i) => {
+        const d = document.createElement('button');
+        d.className = 'deck-dot';
+        d.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+        d.title = 'Slide ' + (i + 1);
+        d.onclick = () => this.goTo(i);
+        dots.appendChild(d);
+      });
+      document.body.appendChild(dots);
+      this.dots = Array.from(dots.children);
+
+      const ctr = document.createElement('div');
+      ctr.className = 'deck-counter';
+      document.body.appendChild(ctr);
+      this.counter = ctr;
+
+      const hints = document.createElement('div');
+      hints.className = 'deck-hints';
+      hints.textContent = '← →  scroll  space  esc';
+      document.body.appendChild(hints);
+      this.hints = hints;
+      this.hintTimer = setTimeout(() => hints.classList.add('faded'), 4500);
+    }
+
+    bindEvents() {
+      document.addEventListener('keydown', (e) => {
+        const t = e.target;
+        if (t && t.closest && t.closest('input, textarea, [contenteditable]')) return;
+        if (['ArrowDown', 'ArrowRight', ' ', 'PageDown'].includes(e.key)) {
+          e.preventDefault(); this.next();
+        } else if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)) {
+          e.preventDefault(); this.prev();
+        } else if (e.key === 'Home') {
+          e.preventDefault(); this.goTo(0);
+        } else if (e.key === 'End') {
+          e.preventDefault(); this.goTo(this.total - 1);
+        } else if (e.key === 'Escape') {
+          e.preventDefault(); this.goTo(0);
+        }
+        this.fadeHints();
+      });
+
+      let touchY;
+      this.deck.addEventListener('touchstart', (e) => {
+        touchY = e.touches[0].clientY;
+      }, { passive: true });
+      this.deck.addEventListener('touchend', (e) => {
+        const dy = touchY - e.changedTouches[0].clientY;
+        if (Math.abs(dy) > 55) { dy > 0 ? this.next() : this.prev(); }
+      });
+    }
+
+    observe() {
+      // Sticky reveal: once a slide crosses the threshold, we add .visible
+      // and never remove it. Rapid Back/Forward navigation cannot catch an
+      // element mid-fade because the opacity transition has already settled.
+      const revealObs = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            revealObs.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.25 });
+      this.slides.forEach((s) => revealObs.observe(s));
+
+      // Progress tracker is independent of reveal state. Free to fire on
+      // every scroll without ever resetting .visible.
+      const progressObs = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            this.current = this.slides.indexOf(entry.target);
+            this.update();
+          }
+        });
+      }, { threshold: 0.55 });
+      this.slides.forEach((s) => progressObs.observe(s));
+    }
+
+    goTo(i) {
+      const idx = Math.max(0, Math.min(i, this.total - 1));
+      this.slides[idx].scrollIntoView({ behavior: 'smooth' });
+    }
+    next() { if (this.current < this.total - 1) this.goTo(this.current + 1); }
+    prev() { if (this.current > 0) this.goTo(this.current - 1); }
+
+    update() {
+      this.bar.style.width = ((this.current + 1) / this.total * 100) + '%';
+      this.dots.forEach((d, i) => d.classList.toggle('active', i === this.current));
+      this.counter.innerHTML = '<span class="accent">' + String(this.current + 1).padStart(2, '0') + '</span> / ' + String(this.total).padStart(2, '0');
+    }
+
+    fadeHints() {
+      clearTimeout(this.hintTimer);
+      this.hints.classList.add('faded');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => new SlideEngine());
+})();
+</script>
+</body>
+</html>
