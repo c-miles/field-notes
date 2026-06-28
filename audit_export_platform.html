@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client Portal Audit Exports · Architecture</title>
+<!-- surf unavailable (Gemini login required); imagery is CSS gradient + hand-built inline SVG -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-body: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+
+  --bg: #0b0d12;
+  --surface: #14171f;
+  --surface2: #1b1f29;
+  --surface3: #232836;
+  --border: rgba(255,255,255,0.08);
+  --border-bright: rgba(255,255,255,0.18);
+  --text: #f4f1ea;
+  --text-dim: #97a0b0;
+
+  --accent: #e8a23d;          /* ember — primary + Audit */
+  --accent-dim: rgba(232,162,61,0.13);
+  --audit: #e8a23d;
+  --audit-dim: rgba(232,162,61,0.13);
+  --platform: #6ea8d8;        /* slate blue — Platform */
+  --platform-dim: rgba(110,168,216,0.15);
+  --green: #5fcf8e;
+  --green-dim: rgba(95,207,142,0.15);
+
+  --code-bg: #090b10;
+  --code-text: #dfe3ea;
+
+  --pad-y: clamp(46px, 7vh, 88px);
+  --pad-x: clamp(46px, 9vw, 132px);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-wrap: break-word;
+}
+
+/* ---------- Deck engine ---------- */
+.deck {
+  height: 100dvh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.slide {
+  height: 100dvh;
+  scroll-snap-align: start;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--pad-y) var(--pad-x);
+  isolation: isolate;
+}
+/* Calm, subtle per-slide atmosphere — no transforms on the slide box itself
+   (transforms here fight scroll-snap and cause the content to visibly shift). */
+.slide::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.7;
+  pointer-events: none;
+}
+.slide:nth-child(odd)::before  { background: radial-gradient(ellipse 60% 55% at 14% 86%, var(--accent-dim) 0%, transparent 60%); }
+.slide:nth-child(even)::before { background: radial-gradient(ellipse 60% 55% at 86% 14%, var(--platform-dim) 0%, transparent 60%); }
+
+/* Entrance: content fades in. Opacity-only on the slide; a small, uniform
+   lift on children. No scaling, so nothing re-centers on navigation. */
+.reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.16,1,0.3,1); }
+.slide.visible .reveal { opacity: 1; transform: none; }
+.slide.visible .reveal:nth-child(1) { transition-delay: 0.06s; }
+.slide.visible .reveal:nth-child(2) { transition-delay: 0.13s; }
+.slide.visible .reveal:nth-child(3) { transition-delay: 0.20s; }
+.slide.visible .reveal:nth-child(4) { transition-delay: 0.27s; }
+.slide.visible .reveal:nth-child(5) { transition-delay: 0.34s; }
+.slide.visible .reveal:nth-child(6) { transition-delay: 0.41s; }
+
+/* ---------- Typography ---------- */
+.slide__display { font-size: clamp(50px, 7.6vw, 104px); font-weight: 600; letter-spacing: -0.035em; line-height: 1.06; margin: 0; text-wrap: balance; }
+.slide__heading { font-size: clamp(30px, 4.2vw, 52px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; margin: 0 0 0.62em; text-wrap: balance; }
+.slide__body { font-size: clamp(17px, 1.55vw, 21px); line-height: 1.6; color: var(--text-dim); text-wrap: pretty; }
+.slide__label { font-family: var(--font-mono); font-size: clamp(11px, 1.1vw, 13px); font-weight: 500; text-transform: uppercase; letter-spacing: 0.22em; color: var(--accent); margin: 0 0 clamp(18px, 2.5vh, 34px); }
+.slide__subtitle { font-family: var(--font-mono); font-size: clamp(14px, 1.8vw, 19px); font-weight: 400; color: var(--text-dim); letter-spacing: 0.01em; }
+.slide__text { max-width: 40ch; }
+em.hot { color: var(--accent); font-style: normal; font-weight: 500; }
+strong { color: var(--text); font-weight: 500; }
+.aud { color: var(--audit); font-weight: 500; }
+.plat { color: var(--platform); font-weight: 500; }
+
+/* ---------- Title ---------- */
+.slide--title { justify-content: center; align-items: center; text-align: center; }
+.title-mark { margin-bottom: 40px; }
+.title-tag { display:inline-block; font-family: var(--font-mono); font-size: clamp(10px,1.1vw,12px); letter-spacing: 0.28em; text-transform: uppercase; color: var(--accent); border:1px solid var(--border-bright); border-radius: 999px; padding: 8px 20px; margin-bottom: 30px; }
+.slide--title .slide__subtitle { margin-top: 26px; }
+
+/* ---------- Divider ---------- */
+.slide--divider { justify-content: center; }
+.slide--divider .slide__number { font-family: var(--font-mono); font-size: clamp(140px,26vw,320px); font-weight: 500; line-height: 0.8; color: var(--accent); opacity: 0.08; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-52%); pointer-events: none; }
+.slide--divider .slide__content { position: relative; }
+.slide--divider .slide__heading { max-width: 18ch; }
+.slide--divider .slide__subtitle { max-width: 46ch; }
+
+/* ---------- Content ---------- */
+.slide__inner { display: grid; grid-template-columns: 1.35fr 1fr; gap: clamp(32px,5vw,80px); align-items: center; width: 100%; }
+.slide__inner--right { grid-template-columns: 1fr 1.35fr; }
+.slide__inner--right .slide__text { margin-left: auto; }
+.slide__bullets { list-style: none; padding: 0; margin: 0; }
+.slide__bullets li { padding: clamp(9px,1.5vh,14px) 0 clamp(9px,1.5vh,14px) 26px; position: relative; font-size: clamp(16px,1.55vw,21px); line-height: 1.5; color: var(--text-dim); }
+.slide__bullets li + li { border-top: 1px solid var(--border); }
+.slide__bullets li::before { content: ''; position: absolute; left: 0; top: calc(clamp(9px,1.5vh,14px) + 11px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.slide__aside { display: flex; align-items: center; justify-content: center; }
+.slide__aside svg { width: 100%; max-width: 280px; height: auto; }
+
+/* ---------- Split ---------- */
+.slide--split { padding: 0; }
+.slide__panels { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
+.slide__panel { padding: var(--pad-y) clamp(36px,5vw,76px); display: flex; flex-direction: column; justify-content: center; }
+.slide__panel--a { background: linear-gradient(155deg, var(--surface) 0%, rgba(232,162,61,0.05) 150%); border-right: 1px solid var(--border); }
+.slide__panel--b { background: linear-gradient(205deg, var(--surface2) 0%, rgba(110,168,216,0.05) 150%); }
+.panel-tag { font-family: var(--font-mono); font-size: clamp(10px,1.1vw,13px); font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: clamp(14px,1.8vh,24px); display:flex; align-items:center; gap:10px; }
+.panel-tag::before { content:''; width:9px; height:9px; border-radius:50%; background: currentColor; }
+.panel-tag--a { color: var(--audit); }
+.panel-tag--b { color: var(--platform); }
+.slide__panel .slide__heading { font-size: clamp(24px,3.2vw,40px); }
+
+/* ---------- Card lists ---------- */
+.card-list { list-style: none; padding: 0; margin: 0; }
+.card-list li { padding: 9px 0 9px 22px; position: relative; font-size: clamp(15px,1.55vw,20px); line-height: 1.45; color: var(--text-dim); }
+.card-list li::before { content: '›'; position: absolute; left: 0; color: currentColor; opacity: 0.55; font-family: var(--font-mono); font-weight: 700; }
+code, .codeword { font-family: var(--font-mono); font-size: 0.84em; background: var(--accent-dim); color: var(--accent); padding: 1px 7px; border-radius: 5px; }
+.card-list.plat code { background: var(--platform-dim); color: var(--platform); }
+
+/* ---------- Pipeline ---------- */
+.pipeline { display: flex; align-items: stretch; gap: 0; flex: 1; min-height: 0; margin-top: clamp(20px,3vh,36px); }
+.pipeline__step { flex: 1; background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 12px; padding: clamp(16px,2.6vh,28px) clamp(13px,1.5vw,22px); display: flex; flex-direction: column; min-width: 0; }
+.pipeline__step--p { border-top-color: var(--platform); }
+.pipeline__num { font-family: var(--font-mono); font-size: clamp(10px,1.1vw,13px); font-weight: 700; color: var(--accent); letter-spacing: 0.1em; }
+.pipeline__step--p .pipeline__num { color: var(--platform); }
+.pipeline__name { font-size: clamp(18px,1.9vw,26px); font-weight: 600; letter-spacing: -0.01em; margin: 8px 0; line-height: 1.05; }
+.pipeline__desc { font-size: clamp(13px,1.15vw,15.5px); color: var(--text-dim); line-height: 1.5; flex: 1; }
+.pipeline__file { font-family: var(--font-mono); font-size: clamp(9px,1vw,11px); color: var(--accent); background: var(--accent-dim); padding: 3px 9px; border-radius: 5px; margin-top: clamp(10px,1.6vh,16px); align-self: flex-start; }
+.pipeline__step--p .pipeline__file { color: var(--platform); background: var(--platform-dim); }
+.pipeline__arrow { display: flex; align-items: center; padding: 0 clamp(4px,0.5vw,8px); color: var(--text-dim); flex-shrink: 0; opacity: 0.4; }
+
+/* ---------- Code ---------- */
+.slide--code .slide__heading { align-self: flex-start; }
+.slide__code-block { background: var(--code-bg); border: 1px solid var(--border-bright); border-radius: 16px; padding: clamp(28px,4vh,48px) clamp(26px,4vw,48px); max-width: 1000px; width: 100%; position: relative; box-shadow: 0 30px 70px rgba(0,0,0,0.45); margin-top: 8px; }
+.slide__code-filename { position: absolute; top: -13px; left: 28px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 5px 13px; border-radius: 6px; background: var(--accent); color: var(--bg); letter-spacing: 0.02em; }
+.slide__code-block.plat .slide__code-filename { background: var(--platform); }
+.slide__code-block pre { margin: 0; overflow-x: auto; }
+.slide__code-block code { font-family: var(--font-mono); font-size: clamp(13px,1.45vw,17px); line-height: 1.75; color: var(--code-text); background: none; padding: 0; }
+.c-com { color: #6c7689; }
+.c-kw { color: #e8a23d; }
+.c-str { color: #8fce9f; }
+.c-meth { color: #84b6e6; }
+
+/* ---------- Diagram ---------- */
+.slide--diagram { padding: clamp(28px,4vh,52px) clamp(36px,5vw,90px); }
+.slide--diagram .slide__heading { margin-bottom: clamp(8px,1.4vh,18px); }
+.mermaid-wrap { border: 1px solid var(--border); border-radius: 16px; background: rgba(9,11,16,0.55); overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; padding: 18px; }
+.mermaid { transition: transform 0.18s ease; }
+.zoom-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 2px; z-index: 10; background: var(--surface); border: 1px solid var(--border-bright); border-radius: 9px; padding: 3px; }
+.zoom-controls button { width: 32px; height: 32px; border: none; background: transparent; color: var(--text-dim); font-family: var(--font-mono); font-size: 15px; cursor: pointer; border-radius: 6px; }
+.zoom-controls button:hover { background: var(--border); color: var(--text); }
+.zoom-hint { position: absolute; bottom: 12px; left: 16px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); opacity: 0.6; z-index: 10; }
+.mermaid .messageText, .mermaid .loopText, .mermaid .noteText { font-family: var(--font-mono) !important; }
+
+/* ---------- Dashboard ---------- */
+.slide__kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(16px,1.8vw,26px); margin-top: clamp(8px,1.6vh,20px); }
+.slide__kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: clamp(22px,3.2vh,38px) clamp(20px,2vw,30px); min-width: 0; }
+.slide__kpi-val { font-family: var(--font-mono); font-size: clamp(34px,4.6vw,56px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.0; color: var(--accent); white-space: nowrap; }
+.slide__kpi-label { font-size: clamp(14px,1.3vw,17px); color: var(--text-dim); margin-top: clamp(11px,1.8vh,18px); line-height: 1.4; }
+
+/* ---------- Table ---------- */
+.slide--table { padding: clamp(28px,4vh,60px) clamp(40px,6vw,110px); }
+.table-wrap { border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: var(--surface); }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th { background: var(--surface3); font-family: var(--font-mono); font-size: clamp(10px,1.1vw,12.5px); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); text-align: left; padding: clamp(12px,1.8vh,18px) clamp(16px,2.2vw,28px); }
+.data-table td { padding: clamp(12px,1.8vh,18px) clamp(16px,2.2vw,28px); border-top: 1px solid var(--border); vertical-align: top; font-size: clamp(14px,1.5vw,18px); color: var(--text); line-height: 1.45; }
+.data-table td:first-child { color: var(--accent); font-weight: 500; white-space: nowrap; }
+.data-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.018); }
+
+/* ---------- Quote ---------- */
+.slide--quote { justify-content: center; align-items: center; text-align: center; padding: clamp(60px,10vh,120px) clamp(50px,12vw,200px); }
+.slide__quote-mark { font-size: clamp(100px,15vw,200px); line-height: 0.5; opacity: 0.12; font-family: Georgia, serif; color: var(--accent); pointer-events: none; margin-bottom: 6px; }
+.slide--quote blockquote { font-size: clamp(28px,4.2vw,54px); font-weight: 500; line-height: 1.25; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+.slide--quote cite { font-family: var(--font-mono); font-size: clamp(11px,1.3vw,13px); font-style: normal; margin-top: clamp(24px,3.5vh,40px); display: block; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); }
+
+/* ---------- Nav chrome ---------- */
+.deck-progress { position: fixed; top: 0; left: 0; height: 2px; background: var(--accent); z-index: 100; transition: width 0.3s ease; pointer-events: none; }
+.deck-dots { position: fixed; right: clamp(12px,2vw,22px); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 9px; z-index: 100; background: color-mix(in srgb, var(--bg) 55%, transparent); padding: 9px 7px; border-radius: 22px; backdrop-filter: blur(6px); }
+.deck-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); opacity: 0.3; border: none; padding: 0; cursor: pointer; transition: opacity 0.2s, transform 0.2s; }
+.deck-dot:hover { opacity: 0.6; }
+.deck-dot.active { opacity: 1; transform: scale(1.5); background: var(--accent); }
+.deck-counter { position: fixed; bottom: clamp(12px,2vh,22px); right: clamp(12px,2vw,22px); font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); z-index: 100; font-variant-numeric: tabular-nums; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+.deck-hints { position: fixed; bottom: clamp(12px,2vh,22px); left: 50%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); opacity: 0.55; z-index: 100; transition: opacity 0.5s; white-space: nowrap; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+.deck-hints.faded { opacity: 0; pointer-events: none; }
+
+@media (max-width: 860px) {
+  .slide__inner, .slide__inner--right { grid-template-columns: 1fr; }
+  .slide__aside { display: none; }
+  .slide__panels { grid-template-columns: 1fr; }
+  .slide__kpis { grid-template-columns: repeat(2,1fr); }
+  .pipeline { flex-direction: column; }
+  .pipeline__arrow { transform: rotate(90deg); justify-content: center; padding: 5px 0; }
+}
+@media (max-height: 720px) {
+  .slide__display { font-size: clamp(40px,7vw,82px); }
+  .slide__heading { font-size: clamp(26px,3.6vw,44px); }
+}
+@media (max-height: 560px) { .slide__aside { display: none; } .deck-dots { display: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; transition: none !important; } .mermaid { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- 1 — TITLE -->
+  <section class="slide slide--title">
+    <div class="title-mark reveal">
+      <svg width="300" height="92" viewBox="0 0 300 92" fill="none" aria-hidden="true">
+        <circle cx="56" cy="46" r="22" fill="var(--audit-dim)" stroke="var(--audit)" stroke-width="2"/>
+        <circle cx="244" cy="46" r="22" fill="var(--platform-dim)" stroke="var(--platform)" stroke-width="2"/>
+        <path d="M81 46 C 130 14, 170 78, 219 46" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 5" fill="none"/>
+        <circle cx="150" cy="46" r="5" fill="var(--accent)"/>
+      </svg>
+    </div>
+    <div class="title-tag reveal">Spike · Proof of Concept</div>
+    <h1 class="slide__display reveal">Client Portal<br>Audit Exports</h1>
+    <p class="slide__subtitle reveal">Two Rails apps, one spreadsheet, handed across the wire</p>
+  </section>
+
+  <!-- 2 — THE ASK (content left) -->
+  <section class="slide slide--content">
+    <div class="slide__inner">
+      <div class="slide__text">
+        <p class="slide__label reveal">The Ask</p>
+        <h2 class="slide__heading reveal">Clients want their results as a spreadsheet</h2>
+        <ul class="slide__bullets">
+          <li class="reveal"><strong>Platform</strong> is building client portal screens that show clients their audit information, including the medical coding being reviewed.</li>
+          <li class="reveal">Client admins want to <strong>export that data to Excel</strong> and have it <em class="hot">emailed</em> to them.</li>
+          <li class="reveal">The catch: the data lives in <span class="aud">Audit</span>, but the screens and the email live in <span class="plat">Platform</span>.</li>
+        </ul>
+      </div>
+      <div class="slide__aside reveal">
+        <svg viewBox="0 0 220 220" fill="none" aria-hidden="true">
+          <rect x="40" y="26" width="120" height="150" rx="12" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+          <path d="M40 50 h120" stroke="var(--accent)" stroke-width="1.5" opacity="0.6"/>
+          <line x1="58" y1="74" x2="142" y2="74" stroke="var(--text-dim)" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+          <line x1="58" y1="98" x2="142" y2="98" stroke="var(--text-dim)" stroke-width="4" stroke-linecap="round" opacity="0.4"/>
+          <line x1="58" y1="122" x2="120" y2="122" stroke="var(--text-dim)" stroke-width="4" stroke-linecap="round" opacity="0.4"/>
+          <line x1="58" y1="146" x2="132" y2="146" stroke="var(--text-dim)" stroke-width="4" stroke-linecap="round" opacity="0.4"/>
+          <circle cx="160" cy="170" r="26" fill="var(--accent)"/>
+          <path d="M160 158 v20 M151 170 l9 9 l9 -9" stroke="var(--bg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 — WHY TWO APPS (split) -->
+  <section class="slide slide--split">
+    <div class="slide__panels">
+      <div class="slide__panel slide__panel--a">
+        <span class="panel-tag panel-tag--a reveal">Audit · has the data</span>
+        <h2 class="slide__heading reveal">Where the work already lives</h2>
+        <ul class="card-list reveal" style="color:var(--audit)">
+          <li>Holds every released evaluation and its scores</li>
+          <li>Already renders spreadsheets via <code>XLSX::Workbook</code></li>
+          <li>Knows which cycles a client is allowed to see</li>
+        </ul>
+      </div>
+      <div class="slide__panel slide__panel--b">
+        <span class="panel-tag panel-tag--b reveal">Platform · faces the client</span>
+        <h2 class="slide__heading reveal">Where the client already is</h2>
+        <ul class="card-list plat reveal" style="color:var(--platform)">
+          <li>Owns the client portal and the Export button</li>
+          <li>Has the email infrastructure, ready to send</li>
+          <li>Has the sign-in logic that gates the download</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 — DIVIDER 01 -->
+  <section class="slide slide--divider">
+    <span class="slide__number">01</span>
+    <div class="slide__content">
+      <p class="slide__label reveal">Section One</p>
+      <h2 class="slide__heading reveal">The shape of the system</h2>
+      <p class="slide__subtitle reveal">A request goes out, an acknowledgement comes straight back, the work happens in the background</p>
+    </div>
+  </section>
+
+  <!-- 5 — ARCHITECTURE DIAGRAM -->
+  <section class="slide slide--diagram">
+    <h2 class="slide__heading reveal">One round trip, drawn out</h2>
+    <div class="mermaid-wrap reveal" style="flex:1; min-height:0;">
+      <div class="zoom-controls">
+        <button onclick="zoomDiagram(this,1.25)" title="Zoom in">+</button>
+        <button onclick="zoomDiagram(this,0.8)" title="Zoom out">&minus;</button>
+        <button onclick="resetZoom(this)" title="Fit">&#8634;</button>
+        <button onclick="openDiagramFullscreen(this)" title="Open full size">&#x26F6;</button>
+      </div>
+      <span class="zoom-hint">+ / &minus; to zoom · ⛶ opens full size</span>
+      <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor U as Client Admin
+  participant P as Platform
+  participant A as Audit
+  U->>P: Clicks Export on the Quality page
+  P->>P: Save record, enqueue request worker
+  P-->>U: We will email the link shortly
+  P->>A: POST audit_exports with scope and callback
+  A->>A: Save record, enqueue generation
+  A-->>P: 202 accepted with audit_export_id
+  A->>A: Build XLSX, attach, record checksum
+  A->>P: Webhook ready with file metadata
+  P->>A: GET the bytes with the API key
+  A-->>P: XLSX bytes
+  P->>P: Verify checksum, attach, mark delivered
+  P-->>U: Email the sign in gated download link
+      </pre>
+    </div>
+  </section>
+
+  <!-- 6 — THE CHOSEN PATH (content right) -->
+  <section class="slide slide--content">
+    <div class="slide__inner slide__inner--right">
+      <div class="slide__aside reveal">
+        <svg viewBox="0 0 200 200" fill="none" aria-hidden="true">
+          <path d="M100 40 A60 60 0 1 1 40 100" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" fill="none"/>
+          <path d="M40 80 L31 100 L49 100 Z" fill="var(--accent)"/>
+          <circle cx="100" cy="100" r="5" fill="var(--text)"/>
+          <path d="M100 100 L100 70 M100 100 L124 112" stroke="var(--text)" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="slide__text">
+        <p class="slide__label reveal">The Approach</p>
+        <h2 class="slide__heading reveal">Background jobs on both sides</h2>
+        <ul class="slide__bullets">
+          <li class="reveal">Both apps run <strong>Sidekiq</strong>, and both <strong>create a record</strong> the moment a request starts.</li>
+          <li class="reveal">The user gets an <em class="hot">immediate answer</em>: the click returns a 202 and a friendly flash, never a spinner.</li>
+          <li class="reveal">The slow part, building and moving the file, happens off to the side where a retry is cheap.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 — DIVISION OF LABOR (split) -->
+  <section class="slide slide--split">
+    <div class="slide__panels">
+      <div class="slide__panel slide__panel--a">
+        <span class="panel-tag panel-tag--a reveal">Audit generates &amp; retains</span>
+        <ul class="card-list reveal" style="color:var(--audit); font-size:clamp(15px,1.7vw,21px);">
+          <li>Runs the visibility query over released evaluations</li>
+          <li>Builds the file through a <code>client-safe</code> column contract</li>
+          <li>Keeps the bytes in <code>ActiveStorage</code> and serves them on request</li>
+          <li>Stays the single authority over the file</li>
+        </ul>
+      </div>
+      <div class="slide__panel slide__panel--b">
+        <span class="panel-tag panel-tag--b reveal">Platform delivers</span>
+        <ul class="card-list plat reveal" style="color:var(--platform); font-size:clamp(15px,1.7vw,21px);">
+          <li>Triggers the export from the portal</li>
+          <li>Pulls the bytes back and verifies them</li>
+          <li>Sends the email through existing infrastructure</li>
+          <li>Gates the download behind sign in</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 — DIVIDER 02 -->
+  <section class="slide slide--divider">
+    <span class="slide__number">02</span>
+    <div class="slide__content">
+      <p class="slide__label reveal">Section Two</p>
+      <h2 class="slide__heading reveal">The flow, step by step</h2>
+      <p class="slide__subtitle reveal">Six moves from a click to an inbox</p>
+    </div>
+  </section>
+
+  <!-- 9 — PIPELINE -->
+  <section class="slide">
+    <p class="slide__label reveal">End to End</p>
+    <h2 class="slide__heading reveal">From button to email</h2>
+    <div class="pipeline reveal">
+      <div class="pipeline__step"><div class="pipeline__num">01</div><div class="pipeline__name">Request</div><div class="pipeline__desc">Platform saves a pending record and POSTs the scope and a callback to Audit.</div><div class="pipeline__file">request worker</div></div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step"><div class="pipeline__num">02</div><div class="pipeline__name">Accept</div><div class="pipeline__desc">Audit saves the request, enqueues generation, returns 202 with an id.</div><div class="pipeline__file">api controller</div></div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step"><div class="pipeline__num">03</div><div class="pipeline__name">Generate</div><div class="pipeline__desc">A job builds the XLSX, attaches it, records the checksum.</div><div class="pipeline__file">generation job</div></div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step"><div class="pipeline__num">04</div><div class="pipeline__name">Notify</div><div class="pipeline__desc">Audit sends a webhook carrying file metadata only, no bytes.</div><div class="pipeline__file">completion callback</div></div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step pipeline__step--p"><div class="pipeline__num">05</div><div class="pipeline__name">Fetch</div><div class="pipeline__desc">Platform GETs the bytes, verifies the checksum, attaches its copy.</div><div class="pipeline__file">ingest worker</div></div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step pipeline__step--p"><div class="pipeline__num">06</div><div class="pipeline__name">Email</div><div class="pipeline__desc">Platform emails a sign in gated download link, exactly once.</div><div class="pipeline__file">export mailer</div></div>
+    </div>
+  </section>
+
+  <!-- 10 — AUDIT SIDE FILES (content left) -->
+  <section class="slide slide--content">
+    <div class="slide__inner">
+      <div class="slide__text">
+        <p class="slide__label reveal">Audit Branch</p>
+        <h2 class="slide__heading reveal">What was done in <span class="aud">Audit</span></h2>
+        <ul class="slide__bullets">
+          <li class="reveal"><strong>API controller</strong> takes the request, returns 202, kicks off a job.</li>
+          <li class="reveal"><strong>Generation job</strong> runs the query, renders the workbook, attaches it, fires the callback.</li>
+          <li class="reveal"><strong>Visibility query and column contract</strong> keep the export scoped and client safe.</li>
+        </ul>
+      </div>
+      <div class="slide__aside reveal">
+        <svg viewBox="0 0 220 232" fill="none" aria-hidden="true">
+          <g font-family="var(--font-mono)" font-size="11" fill="var(--text-dim)">
+            <rect x="14" y="10" width="192" height="42" rx="9" fill="var(--surface)" stroke="var(--audit)" stroke-width="1.5"/><text x="30" y="36">audit_exports_controller</text>
+            <rect x="14" y="68" width="192" height="42" rx="9" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/><text x="30" y="94">generation_job</text>
+            <rect x="14" y="126" width="192" height="42" rx="9" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/><text x="30" y="152">visible_evaluations_query</text>
+            <rect x="14" y="184" width="192" height="42" rx="9" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/><text x="30" y="210">xlsx generator + contract</text>
+          </g>
+          <path d="M110 52 v16 M110 110 v16 M110 168 v16" stroke="var(--audit)" stroke-width="1.5" stroke-dasharray="3 3"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 — AUDIT CODE -->
+  <section class="slide slide--code">
+    <p class="slide__label reveal">Audit · API Controller</p>
+    <div class="slide__code-block reveal">
+      <span class="slide__code-filename">app/controllers/api/v1/audit_exports_controller.rb</span>
+<pre><code><span class="c-kw">def</span> <span class="c-meth">create</span>
+  export = AuditExport.<span class="c-meth">create!</span>(client: @client, platform_export_id:, scope:, ...)
+  AuditExports::GenerationJob.<span class="c-meth">perform_async</span>(export.id)
+  <span class="c-meth">render</span> json: {audit_export_id: export.audit_export_id, status: <span class="c-str">"accepted"</span>}, status: <span class="c-str">:accepted</span>
+<span class="c-kw">end</span>
+
+<span class="c-kw">def</span> <span class="c-meth">show</span>
+  export = AuditExport.completed.<span class="c-meth">find_by</span>(audit_export_id: params[:id])
+  <span class="c-kw">return</span> <span class="c-meth">head</span> <span class="c-str">:not_found</span> <span class="c-kw">unless</span> export&.file&.attached?
+  <span class="c-meth">send_data</span> export.file.download, filename: export.filename, type: export.content_type
+<span class="c-kw">end</span></code></pre>
+    </div>
+  </section>
+
+  <!-- 12 — PLATFORM SIDE FILES (content right) -->
+  <section class="slide slide--content">
+    <div class="slide__inner slide__inner--right">
+      <div class="slide__aside reveal">
+        <svg viewBox="0 0 220 232" fill="none" aria-hidden="true">
+          <g font-family="var(--font-mono)" font-size="11" fill="var(--text-dim)">
+            <rect x="14" y="10" width="192" height="42" rx="9" fill="var(--surface)" stroke="var(--platform)" stroke-width="1.5"/><text x="30" y="36">request_worker</text>
+            <rect x="14" y="68" width="192" height="42" rx="9" fill="var(--surface)" stroke="var(--platform)" stroke-width="1.5"/><text x="30" y="94">webhooks_controller</text>
+            <rect x="14" y="126" width="192" height="42" rx="9" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/><text x="30" y="152">ingest_worker</text>
+            <rect x="14" y="184" width="192" height="42" rx="9" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/><text x="30" y="210">export_mailer</text>
+          </g>
+          <path d="M110 52 v16 M110 110 v16 M110 168 v16" stroke="var(--platform)" stroke-width="1.5" stroke-dasharray="3 3"/>
+        </svg>
+      </div>
+      <div class="slide__text">
+        <p class="slide__label reveal">Platform Branch</p>
+        <h2 class="slide__heading reveal">What was done in <span class="plat">Platform</span></h2>
+        <ul class="slide__bullets">
+          <li class="reveal"><strong>Request worker</strong> submits to Audit and stores the returned id.</li>
+          <li class="reveal"><strong>Webhooks controller</strong> receives the ready callback and enqueues ingest.</li>
+          <li class="reveal"><strong>Ingest worker and mailer</strong> fetch, verify, attach, then email the link.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 — PLATFORM CODE -->
+  <section class="slide slide--code">
+    <p class="slide__label reveal">Platform · Ingest Worker</p>
+    <div class="slide__code-block plat reveal">
+      <span class="slide__code-filename">app/workers/audit_export_ingest_worker.rb</span>
+<pre><code><span class="c-kw">def</span> <span class="c-meth">perform</span>(export_id)
+  export = AuditExport.<span class="c-meth">find_by</span>(id: export_id)
+  <span class="c-kw">return</span> <span class="c-kw">if</span> export.completed? || export.failed?
+
+  <span class="c-meth">fetch_verify_and_attach</span>(export)   <span class="c-com"># GET bytes, verify sha256, attach</span>
+  export.<span class="c-meth">mark_completed!</span>
+  <span class="c-meth">deliver_email</span>(export)             <span class="c-com"># gated by delivered_at, sent once</span>
+<span class="c-kw">end</span></code></pre>
+    </div>
+  </section>
+
+  <!-- 14 — DIVIDER 03 -->
+  <section class="slide slide--divider">
+    <span class="slide__number">03</span>
+    <div class="slide__content">
+      <p class="slide__label reveal">Section Three</p>
+      <h2 class="slide__heading reveal">The webhook layer</h2>
+      <p class="slide__subtitle reveal">The one genuinely new capability, kept generic on both sides</p>
+    </div>
+  </section>
+
+  <!-- 15 — GENERIC WEBHOOK (split) -->
+  <section class="slide slide--split">
+    <div class="slide__panels">
+      <div class="slide__panel slide__panel--a">
+        <span class="panel-tag panel-tag--a reveal">Audit · outbound</span>
+        <h2 class="slide__heading reveal">A sender that knows nothing</h2>
+        <ul class="card-list reveal" style="color:var(--audit); font-size:clamp(15px,1.7vw,20px);">
+          <li><code>Webhooks::Sender</code> takes a url, token, payload</li>
+          <li><code>Webhooks::DeliveryJob</code> retries only transient failures</li>
+          <li>No domain knowledge, reusable for any callback</li>
+        </ul>
+      </div>
+      <div class="slide__panel slide__panel--b">
+        <span class="panel-tag panel-tag--b reveal">Platform · inbound</span>
+        <h2 class="slide__heading reveal">A receiver that just verifies</h2>
+        <ul class="card-list plat reveal" style="color:var(--platform); font-size:clamp(15px,1.7vw,20px);">
+          <li>Constant-time bearer token check</li>
+          <li>Idempotent: replays of a finished export are ignored</li>
+          <li>Acks 204, hands the work to a job</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 16 — WHY NOTIFY THEN FETCH (content left) -->
+  <section class="slide slide--content">
+    <div class="slide__inner">
+      <div class="slide__text">
+        <p class="slide__label reveal">Why Notify, Then Fetch</p>
+        <h2 class="slide__heading reveal">The callback carries news, not cargo</h2>
+        <ul class="slide__bullets">
+          <li class="reveal">The webhook sends <strong>file metadata only</strong>, so no large payloads ride the callback.</li>
+          <li class="reveal">Platform pulls the bytes from Audit's authenticated endpoint, so <span class="aud">Audit</span> stays the <em class="hot">single authority</em> over the file.</li>
+          <li class="reveal">Those bytes are <strong>checksum verified</strong> before anyone is emailed.</li>
+        </ul>
+      </div>
+      <div class="slide__aside reveal">
+        <svg viewBox="0 0 240 200" fill="none" aria-hidden="true">
+          <rect x="14" y="78" width="78" height="44" rx="10" fill="var(--audit-dim)" stroke="var(--audit)" stroke-width="1.5"/>
+          <text x="53" y="105" font-family="var(--font-mono)" font-size="13" fill="var(--audit)" text-anchor="middle">Audit</text>
+          <rect x="148" y="78" width="78" height="44" rx="10" fill="var(--platform-dim)" stroke="var(--platform)" stroke-width="1.5"/>
+          <text x="187" y="105" font-family="var(--font-mono)" font-size="13" fill="var(--platform)" text-anchor="middle">Platform</text>
+          <text x="120" y="64" font-family="var(--font-mono)" font-size="11" fill="var(--text-dim)" text-anchor="middle">ready</text>
+          <path d="M92 92 L148 92" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4"/>
+          <path d="M148 92 l-9 -4 l0 8 Z" fill="var(--accent)"/>
+          <text x="120" y="150" font-family="var(--font-mono)" font-size="11" fill="var(--text-dim)" text-anchor="middle">bytes</text>
+          <path d="M148 108 L92 108" stroke="var(--platform)" stroke-width="2.5"/>
+          <path d="M92 108 l9 -4 l0 8 Z" fill="var(--platform)"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 — DIVIDER 04 -->
+  <section class="slide slide--divider">
+    <span class="slide__number">04</span>
+    <div class="slide__content">
+      <p class="slide__label reveal">Section Four</p>
+      <h2 class="slide__heading reveal">Why this holds up</h2>
+      <p class="slide__subtitle reveal">The payoffs, and the guardrails that keep it honest</p>
+    </div>
+  </section>
+
+  <!-- 18 — PROS DASHBOARD -->
+  <section class="slide slide--dashboard">
+    <p class="slide__label reveal">The Payoff</p>
+    <h2 class="slide__heading reveal">What the design delivers</h2>
+    <div class="slide__kpis">
+      <div class="slide__kpi reveal"><div class="slide__kpi-val">202</div><div class="slide__kpi-label">Instant ack, no spinner for the user</div></div>
+      <div class="slide__kpi reveal"><div class="slide__kpi-val">0</div><div class="slide__kpi-label">New AWS or shared infra needed</div></div>
+      <div class="slide__kpi reveal"><div class="slide__kpi-val">1</div><div class="slide__kpi-label">Generic webhook layer, reusable beyond this</div></div>
+      <div class="slide__kpi reveal"><div class="slide__kpi-val" style="color:var(--audit)">Audit</div><div class="slide__kpi-label">Generates where the data already is</div></div>
+      <div class="slide__kpi reveal"><div class="slide__kpi-val" style="color:var(--platform)">Platform</div><div class="slide__kpi-label">Emails where the infra already is</div></div>
+      <div class="slide__kpi reveal"><div class="slide__kpi-val">~2&#8202;MB</div><div class="slide__kpi-label">Worst case file, small enough to proxy</div></div>
+    </div>
+  </section>
+
+  <!-- 19 — GUARDRAILS TABLE -->
+  <section class="slide slide--table">
+    <h2 class="slide__heading reveal">Guardrails that keep it correct</h2>
+    <div class="table-wrap reveal">
+      <table class="data-table">
+        <thead><tr><th>Concern</th><th>How it is handled</th></tr></thead>
+        <tbody>
+          <tr><td>Who can call</td><td>The API is platform only, authenticated with a shared API key</td></tr>
+          <tr><td>Who can download</td><td>Each export is found by an unguessable uuid, not a sequential id</td></tr>
+          <tr><td>Callback trust</td><td>A per-export bearer token, compared in constant time</td></tr>
+          <tr><td>Tampering</td><td>The sha256 checksum is reverified over the fetched bytes</td></tr>
+          <tr><td>Duplicate emails</td><td>A delivered_at gate plus a terminal-state guard send exactly once</td></tr>
+          <tr><td>Client safety</td><td>A column contract exposes only what clients are allowed to see</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 20 — MIRROR RECORDS (split) -->
+  <section class="slide slide--split">
+    <div class="slide__panels">
+      <div class="slide__panel slide__panel--a">
+        <span class="panel-tag panel-tag--a reveal">Audit · AuditExport</span>
+        <ul class="card-list reveal" style="color:var(--audit); font-size:clamp(15px,1.7vw,20px);">
+          <li><code>audit_export_id</code>, the public uuid handle</li>
+          <li><code>has_one_attached :file</code>, the retained bytes</li>
+          <li>scope, checksum, status, callback details</li>
+        </ul>
+      </div>
+      <div class="slide__panel slide__panel--b">
+        <span class="panel-tag panel-tag--b reveal">Platform · AuditExport</span>
+        <ul class="card-list plat reveal" style="color:var(--platform); font-size:clamp(15px,1.7vw,20px);">
+          <li><code>platform_export_id</code> and <code>callback_token</code></li>
+          <li>belongs to the requesting user and client</li>
+          <li><code>delivered_at</code>, the email gate</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 21 — STATUS (content left) -->
+  <section class="slide slide--content">
+    <div class="slide__inner">
+      <div class="slide__text">
+        <p class="slide__label reveal" style="color:var(--green)">Where It Stands</p>
+        <h2 class="slide__heading reveal">It runs, on real review apps</h2>
+        <ul class="slide__bullets">
+          <li class="reveal">Both apps are deployed to <strong>Heroku review apps</strong>, pointed at each other.</li>
+          <li class="reveal">Exports generate end to end and the <em class="hot">emails arrive</em> in a real inbox.</li>
+          <li class="reveal">This is a spike. If the direction is approved, the real build lands as fresh tickets.</li>
+        </ul>
+      </div>
+      <div class="slide__aside reveal">
+        <svg viewBox="0 0 200 200" fill="none" aria-hidden="true">
+          <circle cx="100" cy="100" r="62" fill="var(--green-dim)" stroke="var(--green)" stroke-width="2.5"/>
+          <path d="M74 102 l18 19 l36 -42" stroke="var(--green)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 22 — CLOSING QUOTE -->
+  <section class="slide slide--quote">
+    <div class="slide__quote-mark reveal">&ldquo;</div>
+    <blockquote class="reveal">Each app does the one thing it already does best. The webhook is just the handshake between them.</blockquote>
+    <cite class="reveal">Client Portal Audit Exports · Spike</cite>
+  </section>
+
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    securityLevel: 'loose',
+    sequence: { actorMargin: 90, width: 165, height: 46, boxMargin: 10, noteMargin: 10, messageMargin: 40, mirrorActors: true },
+    themeVariables: {
+      primaryColor: '#1b1f29',
+      primaryBorderColor: '#e8a23d',
+      primaryTextColor: '#f4f1ea',
+      secondaryColor: '#14171f',
+      secondaryBorderColor: '#6ea8d8',
+      lineColor: '#97a0b0',
+      fontSize: '17px',
+      fontFamily: 'JetBrains Mono, monospace',
+      actorBkg: '#1b1f29',
+      actorBorder: '#e8a23d',
+      actorTextColor: '#f4f1ea',
+      actorLineColor: '#5b6270',
+      signalColor: '#97a0b0',
+      signalTextColor: '#cfd3db',
+      noteBkgColor: '#232836',
+      noteTextColor: '#f4f1ea',
+      noteBorderColor: '#6ea8d8',
+      sequenceNumberColor: '#0b0d12'
+    }
+  });
+</script>
+
+<script>
+/* ---- Mermaid: fit to container, then step zoom from there ---- */
+function fitDiagram(wrap) {
+  var mer = wrap.querySelector('.mermaid');
+  var svg = mer && mer.querySelector('svg');
+  if (!svg) return;
+  var vb = svg.viewBox && svg.viewBox.baseVal;
+  var natW = vb && vb.width ? vb.width : 0;
+  var natH = vb && vb.height ? vb.height : 0;
+  if (!natW || !natH) { var r = svg.getBoundingClientRect(); natW = r.width; natH = r.height; }
+  if (!natW || !natH) return;
+  svg.removeAttribute('width'); svg.removeAttribute('height');
+  svg.style.width = natW + 'px';
+  svg.style.height = natH + 'px';
+  svg.style.maxWidth = 'none';
+  var availW = wrap.clientWidth - 40;
+  var availH = wrap.clientHeight - 40;
+  var scale = Math.min(availW / natW, availH / natH);
+  if (!isFinite(scale) || scale <= 0) scale = 1;
+  mer.style.transformOrigin = 'center center';
+  mer.dataset.base = scale;
+  mer.dataset.zoom = scale;
+  mer.style.transform = 'scale(' + scale + ')';
+}
+function fitAll() { document.querySelectorAll('.mermaid-wrap').forEach(fitDiagram); }
+function zoomDiagram(btn, factor) {
+  var mer = btn.closest('.mermaid-wrap').querySelector('.mermaid');
+  var z = parseFloat(mer.dataset.zoom || '1') * factor;
+  z = Math.max(0.2, Math.min(z, 8));
+  mer.dataset.zoom = z;
+  mer.style.transform = 'scale(' + z + ')';
+}
+function resetZoom(btn) {
+  var mer = btn.closest('.mermaid-wrap').querySelector('.mermaid');
+  var b = parseFloat(mer.dataset.base || '1');
+  mer.dataset.zoom = b;
+  mer.style.transform = 'scale(' + b + ')';
+}
+function openDiagramFullscreen(btn) {
+  var svg = btn.closest('.mermaid-wrap').querySelector('.mermaid svg');
+  if (!svg) return;
+  var w = window.open('');
+  w.document.write('<title>Diagram</title><style>html,body{margin:0;background:#0b0d12;display:flex;align-items:center;justify-content:center;min-height:100vh}svg{max-width:96vw;max-height:96vh;height:auto;width:auto}</style>' + svg.outerHTML);
+  w.document.close();
+}
+function whenDiagramsReady(cb, tries) {
+  tries = tries || 0;
+  var wraps = document.querySelectorAll('.mermaid-wrap');
+  var ok = wraps.length === 0 || [].every.call(wraps, function(w){ return w.querySelector('svg'); });
+  if (ok || tries > 50) cb(); else setTimeout(function(){ whenDiagramsReady(cb, tries + 1); }, 100);
+}
+
+/* ---- Slide engine ---- */
+class SlideEngine {
+  constructor() {
+    this.deck = document.querySelector('.deck');
+    this.slides = [].slice.call(document.querySelectorAll('.slide'));
+    this.current = 0;
+    this.total = this.slides.length;
+    this.buildChrome();
+    this.bindEvents();
+    this.observe();
+    this.update();
+  }
+  buildChrome() {
+    var self = this;
+    var bar = document.createElement('div'); bar.className = 'deck-progress'; document.body.appendChild(bar); this.bar = bar;
+    var dots = document.createElement('div'); dots.className = 'deck-dots';
+    this.slides.forEach(function(_, i) {
+      var d = document.createElement('button'); d.className = 'deck-dot'; d.title = 'Slide ' + (i + 1);
+      d.onclick = function() { self.goTo(i); }; dots.appendChild(d);
+    });
+    document.body.appendChild(dots); this.dots = [].slice.call(dots.children);
+    var ctr = document.createElement('div'); ctr.className = 'deck-counter'; document.body.appendChild(ctr); this.counter = ctr;
+    var hints = document.createElement('div'); hints.className = 'deck-hints'; hints.textContent = '← → or scroll to navigate'; document.body.appendChild(hints); this.hints = hints;
+    this.hintTimer = setTimeout(function() { hints.classList.add('faded'); }, 4000);
+  }
+  bindEvents() {
+    var self = this;
+    document.addEventListener('keydown', function(e) {
+      if (e.target.closest('.mermaid-wrap, input, textarea, [contenteditable]')) return;
+      if (['ArrowDown','ArrowRight',' ','PageDown'].includes(e.key)) { e.preventDefault(); self.next(); }
+      else if (['ArrowUp','ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); self.prev(); }
+      else if (e.key === 'Home') { e.preventDefault(); self.goTo(0); }
+      else if (e.key === 'End') { e.preventDefault(); self.goTo(self.total - 1); }
+      self.fadeHints();
+    });
+    var touchY;
+    this.deck.addEventListener('touchstart', function(e) { touchY = e.touches[0].clientY; }, { passive: true });
+    this.deck.addEventListener('touchend', function(e) {
+      var dy = touchY - e.changedTouches[0].clientY;
+      if (Math.abs(dy) > 50) { dy > 0 ? self.next() : self.prev(); }
+    });
+  }
+  observe() {
+    var self = this;
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          var mw = entry.target.querySelector('.mermaid-wrap');
+          if (mw && mw.querySelector('svg')) fitDiagram(mw);
+          self.current = self.slides.indexOf(entry.target);
+          self.update();
+        }
+      });
+    }, { threshold: 0.55 });
+    this.slides.forEach(function(s) { obs.observe(s); });
+  }
+  goTo(i) { this.slides[Math.max(0, Math.min(i, this.total - 1))].scrollIntoView({ behavior: 'smooth' }); }
+  next() { if (this.current < this.total - 1) this.goTo(this.current + 1); }
+  prev() { if (this.current > 0) this.goTo(this.current - 1); }
+  update() {
+    this.bar.style.width = ((this.current + 1) / this.total * 100) + '%';
+    var self = this;
+    this.dots.forEach(function(d, i) { d.classList.toggle('active', i === self.current); });
+    this.counter.textContent = (this.current + 1) + ' / ' + this.total;
+  }
+  fadeHints() { clearTimeout(this.hintTimer); this.hints.classList.add('faded'); }
+}
+
+window.addEventListener('load', function() {
+  document.querySelector('.slide').classList.add('visible');
+  new SlideEngine();
+  whenDiagramsReady(fitAll);
+});
+var rt;
+window.addEventListener('resize', function() { clearTimeout(rt); rt = setTimeout(fitAll, 200); });
+</script>
+</body>
+</html>
