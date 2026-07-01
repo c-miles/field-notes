@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CDN Weather — field notes on the June 30 CI flakiness and the vendoring fix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-serif: 'Newsreader', 'Instrument Serif', Georgia, serif;
+    --font-sans: 'SF Pro Display', 'Helvetica Neue', system-ui, sans-serif;
+    --font-mono: 'Geist Mono', 'JetBrains Mono', 'SF Mono', monospace;
+
+    --bg: #F7F6F3;
+    --surface: #FFFFFF;
+    --surface-soft: #F9F9F8;
+    --border: #EAEAEA;
+    --ink: #111111;
+    --text: #2F3437;
+    --text-dim: #787774;
+
+    --red-bg: #FDEBEC;
+    --red-ink: #9F2F2D;
+    --green-bg: #EDF3EC;
+    --green-ink: #346538;
+    --yellow-bg: #FBF3DB;
+    --yellow-ink: #956400;
+    --blue-bg: #E1F3FE;
+    --blue-ink: #1F6C9F;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+  }
+
+  /* ============ DECK ENGINE ============ */
+  .deck {
+    height: 100dvh;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* No transform on the slide itself: scroll snap owns positioning,
+     so arriving slides never shift or settle. */
+  .slide {
+    height: 100dvh;
+    scroll-snap-align: start;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 130px);
+    isolation: isolate;
+  }
+
+  .slide .reveal {
+    opacity: 0;
+    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .slide.visible .reveal { opacity: 1; }
+  .slide.visible .reveal:nth-child(1) { transition-delay: 0.05s; }
+  .slide.visible .reveal:nth-child(2) { transition-delay: 0.15s; }
+  .slide.visible .reveal:nth-child(3) { transition-delay: 0.25s; }
+  .slide.visible .reveal:nth-child(4) { transition-delay: 0.35s; }
+  .slide.visible .reveal:nth-child(5) { transition-delay: 0.45s; }
+  .slide.visible .reveal:nth-child(6) { transition-delay: 0.55s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .slide .reveal { opacity: 1 !important; transition: none !important; }
+  }
+
+  /* ============ TYPE ============ */
+  .slide__display {
+    font-family: var(--font-serif);
+    font-size: clamp(56px, 10.5vw, 124px);
+    font-weight: 400;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  .slide__display em { font-style: italic; }
+  .slide__heading {
+    font-family: var(--font-serif);
+    font-size: clamp(30px, 4.8vw, 50px);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  .slide__label {
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.15vw, 12px);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    margin-bottom: clamp(12px, 2.2vh, 20px);
+  }
+  .slide__subtitle {
+    font-size: clamp(16px, 2vw, 21px);
+    color: var(--text-dim);
+    line-height: 1.65;
+  }
+
+  /* ============ NAV CHROME ============ */
+  .deck-progress {
+    position: fixed; top: 0; left: 0; height: 2px;
+    background: var(--ink);
+    z-index: 100;
+    transition: width 0.3s ease;
+    pointer-events: none;
+  }
+  .deck-dots {
+    position: fixed; right: clamp(12px, 2vw, 24px); top: 50%;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 8px; z-index: 100;
+  }
+  .deck-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--text-dim); opacity: 0.3;
+    border: none; padding: 0; cursor: pointer;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .deck-dot:hover { opacity: 0.6; }
+  .deck-dot.active { opacity: 1; transform: scale(1.45); background: var(--ink); }
+  .deck-counter {
+    position: fixed; bottom: clamp(12px, 2vh, 24px); right: clamp(12px, 2vw, 24px);
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);
+    z-index: 100; font-variant-numeric: tabular-nums;
+  }
+  .deck-hints {
+    position: fixed; bottom: clamp(12px, 2vh, 24px); left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);
+    opacity: 0.65; z-index: 100; transition: opacity 0.5s ease; white-space: nowrap;
+  }
+  .deck-hints.faded { opacity: 0; pointer-events: none; }
+
+  /* ============ SHARED ============ */
+  .rule {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: clamp(18px, 3vh, 30px) 0;
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: clamp(9px, 1.05vw, 11px);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 5px 14px;
+    border-radius: 9999px;
+  }
+  .badge--red { background: var(--red-bg); color: var(--red-ink); }
+  .badge--green { background: var(--green-bg); color: var(--green-ink); }
+  .badge--yellow { background: var(--yellow-bg); color: var(--yellow-ink); }
+  .badge--blue { background: var(--blue-bg); color: var(--blue-ink); }
+
+  .bullets { list-style: none; padding: 0; }
+  .bullets li {
+    padding: clamp(8px, 1.4vh, 14px) 0 clamp(8px, 1.4vh, 14px) 26px;
+    position: relative;
+    font-size: clamp(16px, 1.95vw, 22px);
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .bullets li + li { border-top: 1px solid var(--border); }
+  .bullets li::before {
+    content: '';
+    position: absolute; left: 2px; top: clamp(19px, 2.6vh, 26px);
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ink);
+  }
+  .bullets strong { color: var(--ink); font-weight: 600; }
+  .bullets code, .panel__body code, .quote-note code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    padding: 1px 7px;
+    border-radius: 5px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  /* Soft ambient light spot, the only background depth allowed */
+  .spot::before {
+    content: '';
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse 60% 50% at var(--spot-x, 85%) var(--spot-y, 12%), rgba(149, 100, 0, 0.05) 0%, transparent 60%);
+  }
+  .slide > * { position: relative; z-index: 1; }
+
+  /* ============ 1 · TITLE ============ */
+  .slide--title { justify-content: center; }
+  .title-shape {
+    position: absolute;
+    right: clamp(6%, 10vw, 14%);
+    top: 16%;
+    width: clamp(160px, 24vw, 340px);
+    height: clamp(160px, 24vw, 340px);
+    border-radius: 50%;
+    background: #F1DFA8;
+    border: 1px solid #E2CD8C;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .title-block { max-width: 980px; }
+
+  /* ============ CONTENT GRIDS ============ */
+  .inner {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: clamp(32px, 5.5vw, 90px);
+    align-items: center;
+    width: 100%;
+  }
+  .inner--flip { grid-template-columns: 2fr 3fr; }
+  .inner > * { min-width: 0; }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(28px, 5vh, 52px) clamp(24px, 3vw, 44px);
+    text-align: center;
+  }
+  .stat-card__num {
+    font-family: var(--font-serif);
+    font-size: clamp(90px, 13vw, 170px);
+    line-height: 1;
+    color: var(--ink);
+  }
+  .stat-card__caption {
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.15vw, 12.5px);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin-top: 16px;
+    line-height: 1.8;
+  }
+
+  /* ============ 3 · PIPELINE ============ */
+  .pipeline {
+    display: flex; align-items: stretch;
+    margin-top: clamp(20px, 3.4vh, 38px);
+  }
+  .pipeline__step {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(18px, 3.2vh, 34px) clamp(16px, 1.8vw, 28px);
+    display: flex; flex-direction: column;
+    min-width: 0; overflow-wrap: break-word;
+  }
+  .pipeline__num {
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.1vw, 12px);
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+  }
+  .pipeline__step--danger .pipeline__num { color: var(--red-ink); }
+  .pipeline__step--danger { background: var(--red-bg); border-color: #F3D9DA; }
+  .pipeline__name {
+    font-family: var(--font-serif);
+    font-size: clamp(20px, 2.5vw, 29px);
+    color: var(--ink);
+    margin: clamp(8px, 1.3vh, 12px) 0;
+    line-height: 1.15;
+  }
+  .pipeline__desc {
+    font-size: clamp(12.5px, 1.4vw, 15.5px);
+    color: var(--text-dim);
+    line-height: 1.6; flex: 1;
+  }
+  .pipeline__step--danger .pipeline__desc { color: #7c4a49; }
+  .pipeline__arrow {
+    display: flex; align-items: center;
+    padding: 0 clamp(5px, 0.7vw, 12px);
+    color: var(--text-dim); flex-shrink: 0;
+  }
+  .pipeline-footer {
+    margin-top: clamp(18px, 3vh, 32px);
+    font-family: var(--font-mono);
+    font-size: clamp(12px, 1.4vw, 15px);
+    color: var(--text-dim);
+    text-align: center;
+  }
+  .pipeline-footer strong { color: var(--ink); font-weight: 600; }
+
+  /* ============ 5 · SPLIT ============ */
+  .slide--split { padding: 0; }
+  .split-head {
+    position: absolute; top: clamp(30px, 5.5vh, 60px); left: 0; right: 0;
+    text-align: center; z-index: 3; padding: 0 clamp(24px, 5vw, 60px);
+  }
+  .panels { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
+  .panel {
+    padding: clamp(120px, 20vh, 190px) clamp(36px, 5vw, 80px) clamp(48px, 8vh, 90px);
+    display: flex; flex-direction: column; justify-content: center;
+    background: var(--surface);
+  }
+  .panel + .panel { border-left: 1px solid var(--border); }
+  .panel__host {
+    font-family: var(--font-mono);
+    font-size: clamp(17px, 2.1vw, 25px);
+    font-weight: 600;
+    color: var(--ink);
+    margin: clamp(14px, 2.4vh, 24px) 0 clamp(6px, 1.2vh, 12px);
+    overflow-wrap: break-word;
+  }
+  .panel__title {
+    font-family: var(--font-serif);
+    font-size: clamp(24px, 3.2vw, 38px);
+    line-height: 1.12;
+    color: var(--ink);
+    margin-bottom: clamp(12px, 2.2vh, 20px);
+  }
+  .panel__body {
+    font-size: clamp(14px, 1.6vw, 17.5px);
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+  .panel__body strong { color: var(--ink); font-weight: 600; }
+  .panel .badge { align-self: flex-start; }
+
+  /* ============ 6 · FLOW MAP (CSS, no SVG) ============ */
+  .flowmap {
+    display: flex;
+    align-items: center;
+    gap: clamp(8px, 1vw, 16px);
+    width: 100%;
+  }
+  .flowmap__col {
+    display: flex; flex-direction: column;
+    gap: clamp(8px, 1.4vh, 14px);
+    flex: 1; min-width: 0;
+  }
+  .chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: clamp(8px, 1.4vh, 13px) clamp(10px, 1.2vw, 16px);
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.15vw, 13px);
+    color: var(--text-dim);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chip--hub {
+    background: var(--surface);
+    border-color: #DAD7CE;
+    color: var(--ink);
+    font-weight: 600;
+    padding-top: clamp(14px, 2.4vh, 22px);
+    padding-bottom: clamp(14px, 2.4vh, 22px);
+  }
+  .chip--hub small {
+    display: block; font-weight: 400; color: var(--text-dim);
+    margin-top: 3px; font-size: 0.85em;
+  }
+  .chip--cdn { text-align: left; white-space: normal; }
+  .chip--cdn .chip__name { font-weight: 600; color: var(--ink); display: block; margin-bottom: 2px; }
+  .chip--cdn.is-outage { background: var(--yellow-bg); border-color: #EEDFB5; color: var(--yellow-ink); }
+  .chip--cdn.is-reject { background: var(--red-bg); border-color: #F3D9DA; color: var(--red-ink); }
+  .flowmap__arrow {
+    color: var(--text-dim);
+    flex-shrink: 0;
+    display: flex; align-items: center;
+  }
+  .flowmap-caption {
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.15vw, 12px);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: clamp(14px, 2.4vh, 22px);
+    line-height: 1.8;
+  }
+
+  /* ============ 7 · MATRIX ============ */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: clamp(14px, 2vw, 24px);
+    margin-top: clamp(20px, 3.2vh, 34px);
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(20px, 3.4vh, 38px) clamp(20px, 2.4vw, 34px);
+    min-width: 0; overflow: hidden;
+  }
+  .kpi__val {
+    font-family: var(--font-mono);
+    font-size: clamp(30px, 4.6vw, 54px);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+  .kpi__label {
+    font-size: clamp(12px, 1.4vw, 15px);
+    color: var(--text-dim);
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+  .kpi--red .kpi__val { color: var(--red-ink); }
+  .kpi--green { background: var(--green-bg); border-color: #D8E4D6; }
+  .kpi--green .kpi__val { color: var(--green-ink); }
+  .kpi--green .kpi__label { color: #55705a; }
+  .matrix-caption {
+    margin-top: clamp(18px, 3vh, 32px);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: clamp(17px, 2.2vw, 24px);
+    color: var(--text);
+    text-align: center;
+  }
+
+  /* ============ 8 · QUOTE ============ */
+  .slide--quote {
+    justify-content: center; align-items: center; text-align: center;
+    padding: clamp(60px, 10vh, 120px) clamp(50px, 11vw, 190px);
+  }
+  .quote-mark {
+    font-family: var(--font-serif);
+    font-size: clamp(90px, 14vw, 170px);
+    line-height: 0.4;
+    color: var(--yellow-ink);
+    opacity: 0.22;
+    pointer-events: none;
+  }
+  .slide--quote blockquote {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: clamp(32px, 5.4vw, 64px);
+    font-weight: 400;
+    line-height: 1.2;
+    color: var(--ink);
+    margin-top: clamp(10px, 2vh, 18px);
+  }
+  .slide--quote cite {
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.2vw, 13px);
+    font-style: normal;
+    margin-top: clamp(20px, 3.6vh, 38px);
+    display: block;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .quote-note {
+    margin-top: clamp(18px, 3.2vh, 32px);
+    font-size: clamp(14px, 1.7vw, 18px);
+    color: var(--text-dim);
+    line-height: 1.7;
+    max-width: 780px;
+  }
+  .quote-note strong { color: var(--ink); font-weight: 600; }
+
+  /* ============ 9 · FIX ASIDE ============ */
+  .proof-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(22px, 3.6vh, 38px) clamp(22px, 2.6vw, 36px);
+  }
+  .proof-card__cmd {
+    font-family: var(--font-mono);
+    font-size: clamp(12px, 1.35vw, 15px);
+    line-height: 1.9;
+    color: var(--text);
+  }
+  .proof-card__zero {
+    font-family: var(--font-serif);
+    font-size: clamp(64px, 8vw, 110px);
+    line-height: 1;
+    color: var(--green-ink);
+    margin-top: 6px;
+  }
+
+  /* ============ 10 · CODE ============ */
+  .slide--code { align-items: center; }
+  .code-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(28px, 4.6vh, 52px) clamp(26px, 4vw, 52px);
+    max-width: 920px; width: 100%;
+    position: relative;
+    margin-top: clamp(16px, 2.6vh, 28px);
+  }
+  .code-filename {
+    position: absolute; top: -12px; left: 26px;
+    font-family: var(--font-mono);
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    padding: 4px 14px; border-radius: 9999px;
+    background: var(--ink); color: #FFFFFF;
+  }
+  .code-block pre { margin: 0; overflow-x: auto; }
+  .code-block code {
+    font-family: var(--font-mono);
+    font-size: clamp(13px, 1.6vw, 18px);
+    line-height: 1.9;
+    color: var(--ink);
+    white-space: pre;
+  }
+  .code-block .c { color: var(--text-dim); }
+
+  /* ============ 11 · FORECAST ============ */
+  .slide--forecast { justify-content: center; }
+  .forecast-shape {
+    position: absolute;
+    left: clamp(4%, 8vw, 10%);
+    bottom: 14%;
+    width: clamp(140px, 20vw, 280px);
+    height: clamp(140px, 20vw, 280px);
+    border-radius: 50%;
+    background: #F6D3D5;
+    border: 1px solid #E9B6B9;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .forecast-block { max-width: 900px; margin-left: auto; text-align: left; }
+  .forecast-block .slide__heading { font-size: clamp(40px, 6.4vw, 74px); margin-bottom: clamp(16px, 2.8vh, 28px); }
+  .forecast-block .slide__subtitle em {
+    font-family: var(--font-serif);
+    color: var(--ink);
+    font-size: 1.08em;
+  }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-height: 700px) {
+    .slide { padding: clamp(24px, 4vh, 40px) clamp(32px, 6vw, 80px); }
+    .slide__display { font-size: clamp(42px, 8.5vw, 84px); }
+  }
+  @media (max-height: 600px) {
+    .quote-mark, .title-shape, .forecast-shape { display: none; }
+  }
+  @media (max-height: 500px) {
+    .deck-dots { display: none; }
+    .slide__display { font-size: clamp(30px, 7vw, 54px); }
+  }
+  @media (max-width: 768px) {
+    .inner, .inner--flip { grid-template-columns: 1fr; }
+    .inner .aside, .inner--flip .aside { display: none; }
+    .panels { grid-template-columns: 1fr; }
+    .panel { padding: clamp(100px, 16vh, 150px) clamp(24px, 6vw, 40px) clamp(24px, 4vh, 40px); }
+    .panel + .panel { border-left: none; border-top: 1px solid var(--border); }
+    .pipeline { flex-direction: column; gap: 8px; }
+    .pipeline__arrow { justify-content: center; transform: rotate(90deg); padding: 2px 0; }
+    .flowmap { flex-direction: column; }
+    .flowmap__arrow { transform: rotate(90deg); }
+    .kpis { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide slide--title">
+    <div class="title-shape"></div>
+    <div class="title-block">
+      <p class="slide__label reveal">Field notes · Kode Health · July 1, 2026</p>
+      <h1 class="slide__display reveal">CDN <em>Weather</em></h1>
+      <p class="slide__subtitle reveal" style="margin-top: clamp(16px, 3vh, 26px); max-width: 640px;">How two shaky CDNs broke every audit CI run, and how vendoring our JavaScript ended it.</p>
+    </div>
+  </section>
+
+  <!-- 2 · THE PROBLEM -->
+  <section class="slide spot" style="--spot-x: 88%; --spot-y: 10%;">
+    <div class="inner">
+      <div>
+        <p class="slide__label reveal">01 · The problem</p>
+        <h2 class="slide__heading reveal" style="margin-bottom: clamp(14px, 2.6vh, 26px)">Every PR went red at once</h2>
+        <ul class="bullets">
+          <li class="reveal"><strong>June 30, evening.</strong> Run System Tests starts failing on every branch, for every author, no matter what the diff touches.</li>
+          <li class="reveal"><strong>7 to 18 failures per run</strong>, a different set each time. Re-runs just reshuffle which specs die.</li>
+          <li class="reveal">Always the same family: selects never upgrade, menus never expand, date filters stay empty.</li>
+          <li class="reveal">The plain RSpec job stayed green the whole time. <strong>Only browser specs bleed.</strong></li>
+        </ul>
+      </div>
+      <div class="aside reveal">
+        <div class="stat-card">
+          <div class="stat-card__num">14<span style="font-size: 0.42em;">%</span></div>
+          <div class="stat-card__caption">Org wide CI failure rate on July 1,<br>up from a 4.5% June baseline</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · THE EXPOSURE -->
+  <section class="slide">
+    <p class="slide__label reveal">02 · The exposure</p>
+    <h2 class="slide__heading reveal">How a pin becomes a failure</h2>
+    <div class="pipeline reveal">
+      <div class="pipeline__step">
+        <div class="pipeline__num">01 · PIN</div>
+        <div class="pipeline__name">A name maps to a URL</div>
+        <div class="pipeline__desc">importmap.rb pointed 15 packages at ga.jspm.io and cdn.jsdelivr.net. TomSelect, Floating UI, date pickers, charts.</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step">
+        <div class="pipeline__num">02 · PAGE LOAD</div>
+        <div class="pipeline__name">The browser fetches live</div>
+        <div class="pipeline__desc">Import maps resolve in the visitor's browser. Every page load downloads the modules from the CDN, right then.</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step">
+        <div class="pipeline__num">03 · COLD CACHE</div>
+        <div class="pipeline__name">Specs never reuse</div>
+        <div class="pipeline__desc">Each system spec gets a fresh browser context. No HTTP cache. Every page pays the full CDN price again.</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step pipeline__step--danger">
+        <div class="pipeline__num">04 · THE 3s FUSE</div>
+        <div class="pipeline__name">Stall equals red</div>
+        <div class="pipeline__desc">Capybara waits 3 seconds. A slow or refused fetch means a dead Stimulus controller and a failed assertion.</div>
+      </div>
+    </div>
+    <p class="pipeline-footer reveal">6 workers × ~590 specs = <strong>thousands of live CDN bets per CI run</strong></p>
+  </section>
+
+  <!-- 4 · NOT OUR CODE -->
+  <section class="slide spot" style="--spot-x: 10%; --spot-y: 90%;">
+    <div class="inner inner--flip">
+      <div class="aside reveal">
+        <div class="stat-card">
+          <div class="stat-card__num">0</div>
+          <div class="stat-card__caption">Commits to main between its last<br>green nightly and its first red one</div>
+        </div>
+      </div>
+      <div>
+        <p class="slide__label reveal">03 · Findings</p>
+        <h2 class="slide__heading reveal" style="margin-bottom: clamp(14px, 2.6vh, 26px)">The alibi is airtight</h2>
+        <ul class="bullets">
+          <li class="reveal">Main's nightly full suite <strong>passed June 30 and failed July 1 on the identical commit</strong>. Nothing merged in between.</li>
+          <li class="reveal">Runner fingerprints were byte identical between green and red. Same Chromium, same postgres image, same caches, same gems.</li>
+          <li class="reveal">Failure screenshots show <strong>fully rendered pages</strong> with bare native selects. The HTML arrived. The CDN JavaScript did not.</li>
+          <li class="reveal">Every failing assertion maps to a controller that imports a CDN module. Locally served JS never missed once.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · TWO STORMS -->
+  <section class="slide slide--split">
+    <div class="split-head">
+      <p class="slide__label reveal" style="margin-bottom: 8px;">04 · Two different storms</p>
+      <h2 class="slide__heading reveal" style="font-size: clamp(24px, 3.4vw, 38px);">Both CDNs failed us the same week, differently</h2>
+    </div>
+    <div class="panels">
+      <div class="panel">
+        <span class="badge badge--yellow reveal">Reported outage · the stall</span>
+        <div class="panel__host reveal">cdn.jsdelivr.net</div>
+        <div class="panel__body reveal">
+          Documented multi region outage on June 30: <strong>"Error 503 No healthy backends"</strong> from five countries for about 46 minutes, plus first byte timeouts reported at a Fastly edge the same day. It serves our <strong>TomSelect</strong> bundle and stylesheet. A stalled fetch outlives the 3 second budget and the spec dies waiting.
+        </div>
+      </div>
+      <div class="panel">
+        <span class="badge badge--red reveal">Measured rejection · the slam</span>
+        <div class="panel__host reveal">ga.jspm.io</div>
+        <div class="panel__body reveal">
+          Our probe, run from inside the runners, caught it live: <strong>5 to 10 percent of connections instantly reset</strong> at the TCP level, while github.com and jsDelivr were clean through the same egress. It serves <strong>Floating UI, stimulus-use, and cally</strong>. A refused module is a dead controller, and no timeout cures that.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · BEST GUESS -->
+  <section class="slide">
+    <p class="slide__label reveal">05 · Best guess</p>
+    <h2 class="slide__heading reveal" style="margin-bottom: clamp(8px, 1.4vh, 14px)">One noisy neighborhood</h2>
+    <p class="slide__subtitle reveal" style="max-width: 860px; margin-bottom: clamp(18px, 3vh, 32px);">Every Blacksmith customer shares the same egress IPs, and anycast routing sends all of it to one CDN edge. Two live suspects, both unconfirmed: an unhealthy CacheFly edge node on our path (ga.jspm.io runs on CacheFly, which scheduled emergency hardware replacement for July 2), or an anti abuse layer limiting our shared address space. Runner images, fleets, our configs, and our test volume are ruled out. The resets reproduce with 20 polite sequential requests.</p>
+    <div class="flowmap reveal">
+      <div class="flowmap__col">
+        <div class="chip">runner vm</div>
+        <div class="chip">runner vm</div>
+        <div class="chip">runner vm</div>
+      </div>
+      <div class="flowmap__arrow"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="flowmap__col">
+        <div class="chip chip--hub">shared egress IP<small>every customer, one reputation</small></div>
+      </div>
+      <div class="flowmap__arrow"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="flowmap__col">
+        <div class="chip chip--cdn is-outage"><span class="chip__name">cdn.jsdelivr.net</span>outage on June 30, recovered</div>
+        <div class="chip chip--cdn is-reject"><span class="chip__name">ga.jspm.io</span>resetting 5 to 10% of connections</div>
+      </div>
+    </div>
+    <p class="flowmap-caption reveal">Only jspm, CacheFly, or Blacksmith can see whose side it is. The probe output goes in the tickets.</p>
+  </section>
+
+  <!-- 7 · THE MATRIX -->
+  <section class="slide spot" style="--spot-x: 88%; --spot-y: 92%;">
+    <p class="slide__label reveal">06 · The experiments</p>
+    <h2 class="slide__heading reveal">The matrix has exactly one green cell</h2>
+    <div class="kpis">
+      <div class="kpi kpi--red reveal">
+        <div class="kpi__val">18 / 589</div>
+        <div class="kpi__label">Failures with CDN pins on ubuntu 2404, our fleet. Every run since June 30 looks like this.</div>
+      </div>
+      <div class="kpi kpi--red reveal">
+        <div class="kpi__val">10 / 137</div>
+        <div class="kpi__label">Failures with CDN pins on ubuntu 2204. Same signature on the other fleet rules out runner images.</div>
+      </div>
+      <div class="kpi kpi--green reveal">
+        <div class="kpi__val">0 / 685</div>
+        <div class="kpi__label">Failures with vendored JS across 5 stress passes, on the same runners, the same day.</div>
+      </div>
+      <div class="kpi reveal">
+        <div class="kpi__val">10s vs 3s</div>
+        <div class="kpi__label">Why sibling app kode stays green: a bigger Capybara cushion. That is padding, not immunity.</div>
+      </div>
+    </div>
+    <p class="matrix-caption reveal">The only variable in the green cell is where the JavaScript is served from.</p>
+  </section>
+
+  <!-- 8 · QUOTE -->
+  <section class="slide slide--quote">
+    <div class="quote-mark reveal">&ldquo;</div>
+    <blockquote class="reveal">Pinning should just always download.</blockquote>
+    <cite class="reveal">DHH · importmap-rails v2.0.0 · January 2024</cite>
+    <p class="quote-note reveal">Vendoring has been the Rails default for two and a half years: "you should just serve all your assets, including npm dependencies, off your own domain." Our CDN pins were the old style, <strong>inherited from kode eighteen days before the default flipped</strong>, and carried forward by convention ever since.</p>
+  </section>
+
+  <!-- 9 · THE FIX -->
+  <section class="slide spot" style="--spot-x: 12%; --spot-y: 8%;">
+    <div class="inner">
+      <div>
+        <p class="slide__label reveal">07 · The fix · PR #928</p>
+        <h2 class="slide__heading reveal" style="margin-bottom: clamp(14px, 2.6vh, 26px)">Serve our own JavaScript</h2>
+        <ul class="bullets">
+          <li class="reveal">All 15 CDN pins now point at files in <code>vendor/javascript</code>, at the <strong>exact versions production already ran</strong>. About 750KB, committed once.</li>
+          <li class="reveal"><strong>Zero external URLs</strong> left in the resolved import map. CI stops caring about CDN weather, and so does production.</li>
+          <li class="reveal">TomSelect and the two orchidjs packages ship multi file ESM the gem cannot vendor, so those three are <strong>bundled by hand from jsDelivr</strong>, recipe documented in each file header.</li>
+          <li class="reveal">The TomSelect stylesheet moved in app for the same reason.</li>
+        </ul>
+      </div>
+      <div class="aside reveal">
+        <div class="proof-card">
+          <div class="proof-card__cmd">$ bin/importmap json |<br>&nbsp;&nbsp;grep -c "https://"</div>
+          <div class="proof-card__zero">0</div>
+          <div class="stat-card__caption" style="text-align: left; margin-top: 10px;">The whole fix, measured</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 · COMMANDS -->
+  <section class="slide slide--code">
+    <p class="slide__label reveal">08 · Day two</p>
+    <h2 class="slide__heading reveal">Owning it takes four commands</h2>
+    <div class="code-block reveal">
+      <span class="code-filename">terminal</span>
+      <pre><code>bin/importmap pin tom-select@2.4.3  <span class="c"># download + write the pin</span>
+bin/importmap outdated              <span class="c"># what has newer releases</span>
+bin/importmap update                <span class="c"># bump the stale ones</span>
+bin/importmap audit                 <span class="c"># CVE check, already in CI</span>
+
+<span class="c"># No CDN pin needed first: one command resolves the package,</span>
+<span class="c"># downloads it to vendor/javascript, and writes the pin line.</span>
+<span class="c"># Caveat: pristine and update clobber the 3 hand bundled files,</span>
+<span class="c"># rebuild those by hand when upgrading (noted in importmap.rb).</span></code></pre>
+    </div>
+  </section>
+
+  <!-- 11 · FORECAST -->
+  <section class="slide slide--forecast">
+    <div class="forecast-shape"></div>
+    <div class="forecast-block">
+      <p class="slide__label reveal">09 · Forecast</p>
+      <h2 class="slide__heading reveal">The weather continues</h2>
+      <p class="slide__subtitle reveal" style="max-width: 760px;">This was not a one night storm. The suite flaked at a background rate all June, and June 20 and June 23 were early warnings we read as noise. kode still rides the same CDNs behind a bigger timeout. Font Awesome still loads from a kit. Nobody watches pin versions automatically. <em>We fixed our biggest antenna, not the sky.</em></p>
+    </div>
+  </section>
+
+</div>
+
+<script>
+function autoFit() {
+  document.querySelectorAll('.kpi__val').forEach(function(el) {
+    if (el.scrollWidth > el.clientWidth) {
+      var s = el.clientWidth / el.scrollWidth;
+      el.style.transform = 'scale(' + s + ')';
+      el.style.transformOrigin = 'left top';
+    }
+  });
+  document.querySelectorAll('.slide--quote blockquote').forEach(function(el) {
+    var len = el.textContent.trim().length;
+    if (len > 100) {
+      var scale = Math.max(0.5, 100 / len);
+      var fs = parseFloat(getComputedStyle(el).fontSize);
+      el.style.fontSize = Math.max(16, Math.round(fs * scale)) + 'px';
+    }
+  });
+}
+
+class SlideEngine {
+  constructor() {
+    this.deck = document.querySelector('.deck');
+    this.slides = [...document.querySelectorAll('.slide')];
+    this.current = 0;
+    this.total = this.slides.length;
+    this.buildChrome();
+    this.bindEvents();
+    this.observe();
+    this.update();
+  }
+  buildChrome() {
+    var bar = document.createElement('div');
+    bar.className = 'deck-progress';
+    document.body.appendChild(bar);
+    this.bar = bar;
+    var dots = document.createElement('div');
+    dots.className = 'deck-dots';
+    var self = this;
+    this.slides.forEach(function(_, i) {
+      var d = document.createElement('button');
+      d.className = 'deck-dot';
+      d.title = 'Slide ' + (i + 1);
+      d.onclick = function() { self.goTo(i); };
+      dots.appendChild(d);
+    });
+    document.body.appendChild(dots);
+    this.dots = [].slice.call(dots.children);
+    var ctr = document.createElement('div');
+    ctr.className = 'deck-counter';
+    document.body.appendChild(ctr);
+    this.counter = ctr;
+    var hints = document.createElement('div');
+    hints.className = 'deck-hints';
+    hints.textContent = '← → or scroll to navigate';
+    document.body.appendChild(hints);
+    this.hints = hints;
+    this.hintTimer = setTimeout(function() { hints.classList.add('faded'); }, 4000);
+  }
+  bindEvents() {
+    var self = this;
+    document.addEventListener('keydown', function(e) {
+      if (e.target.closest('input, textarea, [contenteditable]')) return;
+      if (['ArrowDown', 'ArrowRight', ' ', 'PageDown'].includes(e.key)) {
+        e.preventDefault(); self.next();
+      } else if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)) {
+        e.preventDefault(); self.prev();
+      } else if (e.key === 'Home') {
+        e.preventDefault(); self.goTo(0);
+      } else if (e.key === 'End') {
+        e.preventDefault(); self.goTo(self.total - 1);
+      }
+      self.fadeHints();
+    });
+    var touchY;
+    this.deck.addEventListener('touchstart', function(e) {
+      touchY = e.touches[0].clientY;
+    }, { passive: true });
+    this.deck.addEventListener('touchend', function(e) {
+      var dy = touchY - e.changedTouches[0].clientY;
+      if (Math.abs(dy) > 50) { dy > 0 ? self.next() : self.prev(); }
+    });
+  }
+  observe() {
+    var self = this;
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          self.current = self.slides.indexOf(entry.target);
+          self.update();
+        }
+      });
+    }, { threshold: 0.5 });
+    this.slides.forEach(function(s) { obs.observe(s); });
+  }
+  goTo(i) {
+    this.slides[Math.max(0, Math.min(i, this.total - 1))].scrollIntoView({ behavior: 'smooth' });
+  }
+  next() { if (this.current < this.total - 1) this.goTo(this.current + 1); }
+  prev() { if (this.current > 0) this.goTo(this.current - 1); }
+  update() {
+    this.bar.style.width = ((this.current + 1) / this.total * 100) + '%';
+    var self = this;
+    this.dots.forEach(function(d, i) { d.classList.toggle('active', i === self.current); });
+    this.counter.textContent = (this.current + 1) + ' / ' + this.total;
+  }
+  fadeHints() {
+    clearTimeout(this.hintTimer);
+    this.hints.classList.add('faded');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  autoFit();
+  new SlideEngine();
+});
+</script>
+</body>
+</html>
