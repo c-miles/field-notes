@@ -628,7 +628,7 @@
       <div class="pipeline__step">
         <div class="pipeline__num">01 · PIN</div>
         <div class="pipeline__name">A name maps to a URL</div>
-        <div class="pipeline__desc">importmap.rb pointed 15 packages at ga.jspm.io and cdn.jsdelivr.net. TomSelect, Floating UI, date pickers, charts.</div>
+        <div class="pipeline__desc">importmap.rb points 15 packages at ga.jspm.io and cdn.jsdelivr.net. TomSelect, Floating UI, date pickers, charts.</div>
       </div>
       <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <div class="pipeline__step">
@@ -752,27 +752,27 @@
     <div class="quote-mark reveal">&ldquo;</div>
     <blockquote class="reveal">Pinning should just always download.</blockquote>
     <cite class="reveal">DHH · importmap-rails v2.0.0 · January 2024</cite>
-    <p class="quote-note reveal">Vendoring has been the Rails default for two and a half years: "you should just serve all your assets, including npm dependencies, off your own domain." Our CDN pins were the old style, <strong>inherited from kode eighteen days before the default flipped</strong>, and carried forward by convention ever since.</p>
+    <p class="quote-note reveal">Vendoring has been the Rails default for two and a half years: "you should just serve all your assets, including npm dependencies, off your own domain." Our CDN pins are the old style, <strong>inherited from kode eighteen days before the default flipped</strong>, and carried forward by convention ever since.</p>
   </section>
 
   <!-- 9 · THE FIX -->
   <section class="slide spot" style="--spot-x: 12%; --spot-y: 8%;">
     <div class="inner">
       <div>
-        <p class="slide__label reveal">07 · The fix · PR #928</p>
+        <p class="slide__label reveal">07 · The proposal · PR #928</p>
         <h2 class="slide__heading reveal" style="margin-bottom: clamp(14px, 2.6vh, 26px)">Serve our own JavaScript</h2>
         <ul class="bullets">
-          <li class="reveal">All 15 CDN pins now point at files in <code>vendor/javascript</code>, at the <strong>exact versions production already ran</strong>. About 750KB, committed once.</li>
-          <li class="reveal"><strong>Zero external URLs</strong> left in the resolved import map. CI stops caring about CDN weather, and so does production.</li>
+          <li class="reveal">PR #928 points all 15 CDN pins at files in <code>vendor/javascript</code>, at the <strong>exact versions production already runs</strong>. About 750KB, committed once.</li>
+          <li class="reveal"><strong>Zero external URLs</strong> remain in the branch's resolved import map. CI would stop caring about CDN weather, and so would production.</li>
           <li class="reveal">TomSelect and the two orchidjs packages ship multi file ESM the gem cannot vendor, so those three are <strong>bundled by hand from jsDelivr</strong>, recipe documented in each file header.</li>
-          <li class="reveal">The TomSelect stylesheet moved in app for the same reason.</li>
+          <li class="reveal">The TomSelect stylesheet moves in app for the same reason.</li>
         </ul>
       </div>
       <div class="aside reveal">
         <div class="proof-card">
           <div class="proof-card__cmd">$ bin/importmap json |<br>&nbsp;&nbsp;grep -c "https://"</div>
           <div class="proof-card__zero">0</div>
-          <div class="stat-card__caption" style="text-align: left; margin-top: 10px;">The whole fix, measured</div>
+          <div class="stat-card__caption" style="text-align: left; margin-top: 10px;">The change, measured on the branch</div>
         </div>
       </div>
     </div>
@@ -781,7 +781,7 @@
   <!-- 10 · COMMANDS -->
   <section class="slide slide--code">
     <p class="slide__label reveal">08 · Day two</p>
-    <h2 class="slide__heading reveal">Owning it takes four commands</h2>
+    <h2 class="slide__heading reveal">Owning it would take four commands</h2>
     <div class="code-block reveal">
       <span class="code-filename">terminal</span>
       <pre><code>bin/importmap pin tom-select@2.4.3  <span class="c"># download + write the pin</span>
@@ -802,7 +802,7 @@ bin/importmap audit                 <span class="c"># CVE check, already in CI</
     <div class="forecast-block">
       <p class="slide__label reveal">09 · Forecast</p>
       <h2 class="slide__heading reveal">The weather continues</h2>
-      <p class="slide__subtitle reveal" style="max-width: 760px;">This was not a one night storm. The suite flaked at a background rate all June, and June 20 and June 23 were early warnings we read as noise. kode still rides the same CDNs behind a bigger timeout. Font Awesome still loads from a kit. Nobody watches pin versions automatically. <em>We fixed our biggest antenna, not the sky.</em></p>
+      <p class="slide__subtitle reveal" style="max-width: 760px;">This was not a one night storm. The suite flaked at a background rate all June, and June 20 and June 23 were early warnings we read as noise. kode still rides the same CDNs behind a bigger timeout. Font Awesome still loads from a kit. Nobody watches pin versions automatically. <em>Vendoring would take down our biggest antenna, not fix the sky.</em></p>
     </div>
   </section>
 
