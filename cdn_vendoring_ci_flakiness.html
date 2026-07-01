@@ -685,7 +685,7 @@
         <span class="badge badge--yellow reveal">Reported outage · the stall</span>
         <div class="panel__host reveal">cdn.jsdelivr.net</div>
         <div class="panel__body reveal">
-          Documented multi region outage on June 30: <strong>"Error 503 No healthy backends"</strong> from five countries for about 46 minutes, plus first byte timeouts reported at a Fastly edge the same day. It serves our <strong>TomSelect</strong> bundle and stylesheet. A stalled fetch outlives the 3 second budget and the spec dies waiting.
+          Documented multi region outage on June 30: <strong>"Error 503 No healthy backends"</strong> from five countries, plus first byte timeouts at a Fastly edge the same day. It serves our <strong>TomSelect</strong> bundle and stylesheet. The caveat: its outage <strong>ended hours before our first red run</strong>, so its role may be coincidental, and the import chains overlap, so a TomSelect failure can still be jspm's fault.
         </div>
       </div>
       <div class="panel">
@@ -719,7 +719,7 @@
         <div class="chip chip--cdn is-reject"><span class="chip__name">ga.jspm.io</span>resetting 5 to 10% of connections</div>
       </div>
     </div>
-    <p class="flowmap-caption reveal">Only jspm, CacheFly, or Blacksmith can see whose side it is. The probe output goes in the tickets.</p>
+    <p class="flowmap-caption reveal">Only jspm, CacheFly, or Blacksmith can see whose side it is, and it does not matter:<br>vendoring ends our exposure no matter which of them fixes it.</p>
   </section>
 
   <!-- 7 · THE MATRIX -->
