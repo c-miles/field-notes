@@ -646,7 +646,7 @@
       <div class="pipeline__step pipeline__step--danger">
         <div class="pipeline__num">04 · THE 3s FUSE</div>
         <div class="pipeline__name">Stall equals red</div>
-        <div class="pipeline__desc">Capybara waits 3 seconds. A slow or refused fetch means a dead Stimulus controller and a failed assertion.</div>
+        <div class="pipeline__desc">Capybara waits 3 seconds. A slow or failed fetch means a dead Stimulus controller and a failed assertion.</div>
       </div>
     </div>
     <p class="pipeline-footer reveal">6 workers × ~590 specs = <strong>thousands of live CDN bets per CI run</strong></p>
@@ -689,10 +689,10 @@
         </div>
       </div>
       <div class="panel">
-        <span class="badge badge--red reveal">Measured rejection · the slam</span>
+        <span class="badge badge--red reveal">Measured live · the drop</span>
         <div class="panel__host reveal">ga.jspm.io</div>
         <div class="panel__body reveal">
-          Our probe, run from inside the runners, caught it live: <strong>5 to 10 percent of connections instantly reset</strong> at the TCP level, while github.com and jsDelivr were clean through the same egress. It serves <strong>Floating UI, stimulus-use, and cally</strong>. A refused module is a dead controller, and no timeout cures that.
+          Our probe, run from inside the runners, caught it live: <strong>5 to 10 percent of connections fail instantly with no route to host</strong>, while github.com and jsDelivr were clean through the same egress. Packet captures show zero resets from the server side, the network itself refuses delivery. It serves <strong>Floating UI, stimulus-use, and cally</strong>. A failed module is a dead controller, and no timeout cures that.
         </div>
       </div>
     </div>
@@ -700,9 +700,9 @@
 
   <!-- 6 · BEST GUESS -->
   <section class="slide">
-    <p class="slide__label reveal">05 · Best guess</p>
-    <h2 class="slide__heading reveal" style="margin-bottom: clamp(8px, 1.4vh, 14px)">One noisy neighborhood</h2>
-    <p class="slide__subtitle reveal" style="max-width: 860px; margin-bottom: clamp(18px, 3vh, 32px);">Every Blacksmith customer shares the same egress IPs, and anycast routing sends all of it to one CDN edge. Two live suspects, both unconfirmed: an unhealthy CacheFly edge node on our path (ga.jspm.io runs on CacheFly, which scheduled emergency hardware replacement for July 2), or an anti abuse layer limiting our shared address space. Runner images, fleets, our configs, and our test volume are ruled out. The resets reproduce with 20 polite sequential requests.</p>
+    <p class="slide__label reveal">05 · Root cause</p>
+    <h2 class="slide__heading reveal" style="margin-bottom: clamp(8px, 1.4vh, 14px)">A routing loop, caught on camera</h2>
+    <p class="slide__subtitle reveal" style="max-width: 860px; margin-bottom: clamp(18px, 3vh, 32px);">Packet capture paired every failed connect one to one with an ICMP time exceeded from a router six hops in, before the public transit handoff. Packets toward CacheFly's prefix occasionally circle until they die, which Linux reports as no route to host. That is a routing fault on the runner side of the path, not rate limiting, not jspm, and not our configs, though the trigger could still be upstream route flapping near CacheFly's July 2 hardware work. The failures reproduce with 20 polite sequential requests.</p>
     <div class="flowmap reveal">
       <div class="flowmap__col">
         <div class="chip">runner vm</div>
@@ -711,15 +711,15 @@
       </div>
       <div class="flowmap__arrow"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <div class="flowmap__col">
-        <div class="chip chip--hub">shared egress IP<small>every customer, one reputation</small></div>
+        <div class="chip chip--hub">shared network path<small>where the loop lives</small></div>
       </div>
       <div class="flowmap__arrow"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <div class="flowmap__col">
         <div class="chip chip--cdn is-outage"><span class="chip__name">cdn.jsdelivr.net</span>outage on June 30, recovered</div>
-        <div class="chip chip--cdn is-reject"><span class="chip__name">ga.jspm.io</span>resetting 5 to 10% of connections</div>
+        <div class="chip chip--cdn is-reject"><span class="chip__name">ga.jspm.io</span>unreachable for 5 to 10% of connections</div>
       </div>
     </div>
-    <p class="flowmap-caption reveal">Only jspm, CacheFly, or Blacksmith can see whose side it is, and it does not matter:<br>vendoring ends our exposure no matter which of them fixes it.</p>
+    <p class="flowmap-caption reveal">The loop sits on the runner side of the transit handoff, so the ticket goes to Blacksmith first,<br>and vendoring ends our exposure no matter who fixes it.</p>
   </section>
 
   <!-- 7 · THE MATRIX -->
