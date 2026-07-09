@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unable to Audit: The Abandonment Subsystem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Fragment+Mono:ital@0;1&display=swap" rel="stylesheet">
+<!-- surf unavailable (Gemini login), using CSS gradient + SVG fallback for title and full-bleed art -->
+<style>
+:root {
+  --font-body: 'Bricolage Grotesque', 'Avenir Next', system-ui, sans-serif;
+  --font-mono: 'Fragment Mono', 'SF Mono', Consolas, monospace;
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface2: #f3ede3;
+  --surface-elevated: #fffdf8;
+  --border: rgba(50, 40, 30, 0.09);
+  --border-bright: rgba(50, 40, 30, 0.18);
+  --text: #38302a;
+  --text-dim: #85796a;
+  --text-heading: #4f2f26;
+  --accent: #b23a2e;
+  --accent-dim: rgba(178, 58, 46, 0.07);
+  --credit: #0f7b4d;
+  --credit-dim: rgba(15, 123, 77, 0.08);
+  --gold: #a8741a;
+  --gold-dim: rgba(168, 116, 26, 0.1);
+  --slate: #33608c;
+  --slate-dim: rgba(51, 96, 140, 0.08);
+  --code-bg: #28221c;
+  --code-text: #f0e8dc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #191512;
+    --surface: #231e19;
+    --surface2: #2d2620;
+    --surface-elevated: #38302a;
+    --border: rgba(230, 210, 190, 0.09);
+    --border-bright: rgba(230, 210, 190, 0.18);
+    --text: #f0e6d8;
+    --text-dim: #a89c8b;
+    --text-heading: #ecd9c3;
+    --accent: #e05a4a;
+    --accent-dim: rgba(224, 90, 74, 0.1);
+    --credit: #3dbf85;
+    --credit-dim: rgba(61, 191, 133, 0.1);
+    --gold: #d9a441;
+    --gold-dim: rgba(217, 164, 65, 0.12);
+    --slate: #7aa3cc;
+    --slate-dim: rgba(122, 163, 204, 0.1);
+    --code-bg: #120f0c;
+    --code-text: #ece4d8;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+code { font-family: var(--font-mono); }
+
+/* ===== Deck engine ===== */
+.deck {
+  height: 100dvh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.slide {
+  height: 100dvh;
+  scroll-snap-align: start;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px);
+  isolation: isolate;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.slide.visible { opacity: 1; }
+.slide .reveal {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.slide.visible .reveal { opacity: 1; }
+.slide.visible .reveal:nth-child(1) { transition-delay: 0.08s; }
+.slide.visible .reveal:nth-child(2) { transition-delay: 0.16s; }
+.slide.visible .reveal:nth-child(3) { transition-delay: 0.24s; }
+.slide.visible .reveal:nth-child(4) { transition-delay: 0.32s; }
+.slide.visible .reveal:nth-child(5) { transition-delay: 0.40s; }
+.slide.visible .reveal:nth-child(6) { transition-delay: 0.48s; }
+@media (prefers-reduced-motion: reduce) {
+  .slide, .slide .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+}
+
+/* ===== Typography ===== */
+.slide__display {
+  color: var(--text-heading);
+  font-size: clamp(48px, 9vw, 112px);
+  font-weight: 800;
+  letter-spacing: -2.5px;
+  line-height: 0.95;
+  text-wrap: balance;
+  margin: 0;
+}
+.slide__heading {
+  color: var(--text-heading);
+  font-size: clamp(28px, 4.6vw, 46px);
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1.08;
+  text-wrap: balance;
+  margin: 0;
+}
+.slide__body { font-size: clamp(16px, 2.2vw, 23px); line-height: 1.6; }
+.slide__label {
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 1.2vw, 13px);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin: 0 0 10px;
+}
+.slide__subtitle {
+  font-family: var(--font-mono);
+  font-size: clamp(13px, 1.7vw, 18px);
+  color: var(--text-dim);
+  letter-spacing: 0.4px;
+}
+
+/* ===== Nav chrome ===== */
+.deck-progress { position: fixed; top: 0; left: 0; height: 3px; background: var(--accent); z-index: 100; transition: width 0.3s ease; pointer-events: none; }
+.deck-dots { position: fixed; right: clamp(10px, 1.6vw, 20px); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 7px; z-index: 100; background: color-mix(in srgb, var(--bg) 65%, transparent); padding: 8px 6px; border-radius: 20px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.deck-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); opacity: 0.3; border: none; padding: 0; cursor: pointer; transition: opacity 0.2s ease, transform 0.2s ease; }
+.deck-dot:hover { opacity: 0.6; }
+.deck-dot.active { opacity: 1; transform: scale(1.5); background: var(--accent); }
+.deck-counter { position: fixed; bottom: clamp(12px, 2vh, 24px); right: clamp(12px, 2vw, 24px); font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); z-index: 100; font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.deck-hints { position: fixed; bottom: clamp(12px, 2vh, 24px); left: 50%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); opacity: 0.6; z-index: 100; transition: opacity 0.5s ease; white-space: nowrap; }
+.deck-hints.faded { opacity: 0; pointer-events: none; }
+
+/* ===== Title ===== */
+.slide--title { justify-content: center; align-items: center; text-align: center; background-image: radial-gradient(ellipse at 50% 110%, var(--accent-dim) 0%, transparent 55%), radial-gradient(ellipse at 85% 0%, var(--gold-dim) 0%, transparent 45%); }
+.title-art { display: flex; justify-content: center; margin-bottom: clamp(24px, 5vh, 56px); pointer-events: none; }
+.title-art svg { width: min(760px, 78vw); height: auto; opacity: 0.85; }
+.title-kicker { font-family: var(--font-mono); font-size: clamp(11px, 1.4vw, 14px); letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 18px; }
+
+/* ===== Divider ===== */
+.slide--divider { justify-content: center; }
+.slide--divider .slide__number {
+  font-size: clamp(120px, 24vw, 280px);
+  font-weight: 300;
+  line-height: 0.85;
+  opacity: 0.07;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -55%);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* ===== Content ===== */
+.slide--content .slide__inner { display: grid; grid-template-columns: 3fr 2fr; gap: clamp(24px, 4vw, 60px); align-items: center; width: 100%; }
+.slide--content .slide__inner--flip { grid-template-columns: 2fr 3fr; }
+.slide__bullets { list-style: none; padding: 0; margin: clamp(14px, 2.5vh, 28px) 0 0; }
+.slide__bullets li { padding: clamp(6px, 1.2vh, 11px) 0 clamp(6px, 1.2vh, 11px) 24px; position: relative; font-size: clamp(15px, 1.9vw, 21px); line-height: 1.55; color: var(--text-dim); }
+.slide__bullets li::before { content: ''; position: absolute; left: 0; top: calc(clamp(6px, 1.2vh, 11px) + 0.62em); width: 7px; height: 7px; border-radius: 50%; background: var(--accent); transform: translateY(-50%); }
+.slide__bullets li strong { color: var(--text); font-weight: 650; }
+.slide__bullets li code { font-size: 0.85em; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--text); white-space: nowrap; }
+.slide__aside { min-width: 0; }
+
+/* stat card aside */
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: clamp(18px, 3vh, 32px) clamp(18px, 2.4vw, 30px); box-shadow: 0 10px 30px rgba(40,30,20,0.06); }
+.stat-card + .stat-card { margin-top: clamp(10px, 2vh, 18px); }
+.stat-card__num { font-size: clamp(30px, 4.6vw, 54px); font-weight: 800; letter-spacing: -1.5px; line-height: 1.05; }
+.stat-card__label { font-family: var(--font-mono); font-size: clamp(10px, 1.2vw, 13px); text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }
+
+/* transaction boundary box */
+.txn-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgba(40,30,20,0.06); }
+.txn-box__zone { padding: clamp(16px, 2.6vh, 26px) clamp(18px, 2.2vw, 28px); }
+.txn-box__zone--after { background: var(--surface2); }
+.txn-box__list { font-family: var(--font-mono); font-size: clamp(12.5px, 1.5vw, 16px); line-height: 1.9; margin-top: 12px; color: var(--text-dim); }
+.txn-box__commit { position: relative; border-top: 1.5px dashed var(--border-bright); }
+.txn-box__commit span { position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; background: var(--surface); color: var(--credit); padding: 2px 12px; border: 1px solid var(--border-bright); border-radius: 999px; }
+
+/* ===== Split ===== */
+.slide--split { padding: 0; }
+.slide--split .slide__panels { display: grid; grid-template-columns: 3fr 2fr; height: 100%; }
+.slide--split .slide__panels--even { grid-template-columns: 1fr 1fr; }
+.slide__panel { padding: clamp(36px, 5.5vh, 72px) clamp(30px, 4vw, 60px); display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.slide__panel--primary { background: var(--surface); }
+.slide__panel--secondary { background: var(--surface2); }
+
+/* ===== Pipeline ===== */
+.pipeline { display: flex; align-items: stretch; gap: 0; flex: 0 1 auto; min-height: 0; margin-top: clamp(16px, 3vh, 32px); }
+.pipeline__step { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: clamp(14px, 2.5vh, 28px) clamp(12px, 1.5vw, 22px); display: flex; flex-direction: column; min-width: 0; overflow-wrap: break-word; box-shadow: 0 8px 22px rgba(40,30,20,0.05); }
+.pipeline__num { font-family: var(--font-mono); font-size: clamp(10px, 1.2vw, 13px); color: var(--accent); letter-spacing: 1px; }
+.pipeline__name { font-size: clamp(15px, 1.9vw, 22px); font-weight: 700; margin: clamp(4px, 0.8vh, 8px) 0; letter-spacing: -0.3px; }
+.pipeline__desc { font-size: clamp(12px, 1.3vw, 15px); color: var(--text-dim); line-height: 1.5; flex: 1; }
+.pipeline__file { font-family: var(--font-mono); font-size: clamp(9px, 1vw, 11.5px); color: var(--accent); background: var(--accent-dim); padding: 3px 8px; border-radius: 4px; margin-top: clamp(8px, 1.5vh, 16px); align-self: flex-start; max-width: 100%; overflow-wrap: anywhere; }
+.pipeline__arrow { display: flex; align-items: center; padding: 0 clamp(3px, 0.4vw, 6px); color: var(--accent); flex-shrink: 0; opacity: 0.45; }
+
+/* ===== Diagram ===== */
+.slide--diagram { padding: clamp(24px, 4vh, 48px) clamp(24px, 4vw, 60px); justify-content: flex-start; }
+.slide--diagram .slide__heading { margin-bottom: clamp(8px, 1.5vh, 18px); }
+.mermaid-wrap { position: relative; flex: 1; min-height: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: auto; display: flex; align-items: center; justify-content: center; cursor: grab; }
+.mermaid-wrap.is-panning { cursor: grabbing; user-select: none; }
+.mermaid-wrap .mermaid { transform-origin: center center; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; margin: 0; }
+.zoom-controls { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; z-index: 5; background: color-mix(in srgb, var(--surface) 85%, transparent); border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+.zoom-controls button { width: 30px; height: 30px; border: none; background: transparent; color: var(--text-dim); font-size: 15px; cursor: pointer; border-radius: 5px; display: flex; align-items: center; justify-content: center; transition: background 0.15s ease, color 0.15s ease; font-family: var(--font-mono); }
+.zoom-controls button:hover { background: var(--border); color: var(--text); }
+.slide--diagram .mermaid svg { width: auto !important; height: auto !important; max-width: 100% !important; max-height: 100% !important; }
+.mermaid .nodeLabel { font-size: 12px !important; }
+.mermaid .edgeLabel { font-size: 10.5px !important; }
+.slide--diagram .mermaid .node rect, .slide--diagram .mermaid .node circle, .slide--diagram .mermaid .node polygon, .slide--diagram .mermaid .node path { stroke-width: 2px; }
+.diagram-caption { font-family: var(--font-mono); font-size: clamp(10px, 1.2vw, 12.5px); color: var(--text-dim); margin-top: 10px; opacity: 0.8; }
+
+/* ===== Table ===== */
+.slide--table { padding: clamp(24px, 4vh, 48px) clamp(24px, 4vw, 60px); }
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 10px 28px rgba(40,30,20,0.05); }
+.table-scroll { overflow: auto; max-height: 100%; }
+.data-table { width: 100%; border-collapse: collapse; font-size: clamp(13px, 1.55vw, 17.5px); line-height: 1.5; }
+.data-table th { font-family: var(--font-mono); font-size: clamp(9.5px, 1.15vw, 12.5px); text-transform: uppercase; letter-spacing: 1.2px; text-align: left; color: var(--text-dim); padding: clamp(8px, 1.4vh, 13px) clamp(12px, 1.8vw, 20px); border-bottom: 2px solid var(--border-bright); position: sticky; top: 0; background: var(--surface); }
+.data-table td { padding: clamp(9px, 1.4vh, 15px) clamp(12px, 1.8vw, 20px); border-bottom: 1px solid var(--border); vertical-align: top; }
+.data-table tr:nth-child(even) td { background: color-mix(in srgb, var(--surface2) 55%, transparent); }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table code { font-size: 0.85em; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.data-table small { color: var(--text-dim); display: block; margin-top: 2px; }
+
+/* badges */
+.badge { display: inline-block; font-family: var(--font-mono); font-size: clamp(9px, 1.05vw, 11.5px); font-weight: 400; letter-spacing: 1px; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.badge--allow { color: var(--credit); background: var(--credit-dim); border: 1px solid color-mix(in srgb, var(--credit) 35%, transparent); }
+.badge--deny { color: var(--accent); background: var(--accent-dim); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.badge--gold { color: var(--gold); background: var(--gold-dim); border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent); }
+.badge--slate { color: var(--slate); background: var(--slate-dim); border: 1px solid color-mix(in srgb, var(--slate) 40%, transparent); }
+
+/* ===== Code ===== */
+.slide__code-block { background: var(--code-bg); border: 1px solid var(--border-bright); border-radius: 12px; padding: clamp(20px, 3.4vh, 40px) clamp(20px, 3vw, 40px); position: relative; min-width: 0; }
+.slide__code-filename { position: absolute; top: -12px; left: 22px; font-family: var(--font-mono); font-size: 10.5px; padding: 4px 12px; border-radius: 4px; background: var(--accent); color: #fff; letter-spacing: 0.5px; }
+.slide__code-block pre { margin: 0; overflow-x: auto; }
+.slide__code-block code { font-size: clamp(12px, 1.45vw, 16px); line-height: 1.75; color: var(--code-text); background: none; border: none; padding: 0; white-space: pre; }
+.slide__code-block .hl { color: #e8a87c; }
+.slide__code-block .cm { color: #8a7f70; font-style: italic; }
+.slide__code-block .st { color: #a3c9a8; }
+
+/* ===== Ledger split ===== */
+.ledger-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: clamp(12px, 2vh, 22px); }
+.ledger-head h3 { font-size: clamp(20px, 2.8vw, 32px); font-weight: 700; letter-spacing: -0.6px; margin: 0; color: var(--text-heading); }
+.ledger-list { list-style: none; margin: 0; padding: 0; }
+.ledger-list li { padding: clamp(7px, 1.3vh, 12px) 0 clamp(7px, 1.3vh, 12px) 22px; position: relative; font-size: clamp(13.5px, 1.6vw, 18px); line-height: 1.55; color: var(--text-dim); }
+.ledger-list li strong { color: var(--text); font-weight: 650; }
+.ledger-list li code { font-size: 0.84em; background: color-mix(in srgb, var(--bg) 60%, transparent); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
+.ledger-list--debit li::before { content: '−'; position: absolute; left: 0; top: clamp(7px, 1.3vh, 12px); color: var(--accent); font-weight: 800; }
+.ledger-list--credit li::before { content: '+'; position: absolute; left: 0; top: clamp(7px, 1.3vh, 12px); color: var(--credit); font-weight: 800; }
+
+/* ===== Codes grid ===== */
+.codes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(clamp(170px, 17vw, 240px), 1fr)); gap: clamp(10px, 1.4vw, 16px); margin-top: clamp(14px, 2.4vh, 26px); }
+.code-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: clamp(12px, 2vh, 18px) clamp(12px, 1.4vw, 18px); min-width: 0; }
+.code-card--allow { background: color-mix(in srgb, var(--credit) 5%, var(--surface)); }
+.code-card--deny { background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+.code-card__name { font-family: var(--font-mono); font-size: clamp(11.5px, 1.3vw, 14.5px); font-weight: 400; margin: 8px 0 6px; color: var(--text); overflow-wrap: anywhere; }
+.code-card__desc { font-size: clamp(11.5px, 1.25vw, 14px); color: var(--text-dim); line-height: 1.5; }
+
+/* ===== Full bleed ===== */
+.slide--bleed { padding: 0; justify-content: flex-end; color: #f5efe6; }
+.slide__bg { position: absolute; inset: 0; background-size: cover; background-position: center; z-index: 0; }
+.slide__bg--gradient { background: linear-gradient(140deg, #7e2a20 0%, #52302a 42%, #22303c 100%); }
+.slide__scrim { position: absolute; inset: 0; background: linear-gradient(to top, rgba(10,8,6,0.55) 0%, rgba(10,8,6,0.12) 55%, transparent 100%); z-index: 1; }
+.slide--bleed .slide__content { position: relative; z-index: 2; padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px); }
+.slide--bleed .slide__heading { color: inherit; }
+.bleed-art { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 8vw; z-index: 1; pointer-events: none; }
+.bleed-art svg { width: min(420px, 38vw); height: auto; opacity: 0.55; }
+
+/* grid dots background */
+.slide--with-grid::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 30px 30px; opacity: 0.5; pointer-events: none; z-index: 0; }
+.slide--with-grid > * { position: relative; z-index: 1; }
+
+/* responsive */
+@media (max-height: 700px) {
+  .slide { padding: clamp(24px, 4vh, 40px) clamp(32px, 6vw, 80px); }
+  .slide__display { font-size: clamp(36px, 8vw, 72px); }
+  .slide--divider .slide__number { font-size: clamp(80px, 16vw, 160px); }
+}
+@media (max-height: 500px) {
+  .deck-dots { display: none; }
+  .slide__display { font-size: clamp(28px, 7vw, 48px); }
+}
+@media (max-width: 768px) {
+  .slide--content .slide__inner, .slide--content .slide__inner--flip { grid-template-columns: 1fr; }
+  .slide--content .slide__aside { display: none; }
+  .slide--split .slide__panels, .slide--split .slide__panels--even { grid-template-columns: 1fr; height: auto; min-height: 100%; overflow-y: auto; }
+  .pipeline { flex-direction: column; }
+  .pipeline__arrow { justify-content: center; padding: 4px 0; transform: rotate(90deg); }
+  .title-art { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- 1 · TITLE -->
+<section class="slide slide--title">
+  <div class="title-art" aria-hidden="true">
+    <svg viewBox="0 0 760 240" fill="none">
+      <g opacity="0.9">
+        <rect x="30" y="70" width="110" height="150" rx="8" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <line x1="50" y1="100" x2="120" y2="100" stroke="var(--slate)" stroke-width="3" opacity="0.35"/>
+        <line x1="50" y1="122" x2="112" y2="122" stroke="var(--border-bright)" stroke-width="3"/>
+        <line x1="50" y1="144" x2="120" y2="144" stroke="var(--border-bright)" stroke-width="3"/>
+        <rect x="170" y="70" width="110" height="150" rx="8" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <line x1="190" y1="100" x2="260" y2="100" stroke="var(--slate)" stroke-width="3" opacity="0.35"/>
+        <line x1="190" y1="122" x2="252" y2="122" stroke="var(--border-bright)" stroke-width="3"/>
+        <line x1="190" y1="144" x2="260" y2="144" stroke="var(--border-bright)" stroke-width="3"/>
+        <g transform="rotate(-7 425 145)">
+          <rect x="370" y="62" width="110" height="150" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+          <line x1="390" y1="92" x2="460" y2="92" stroke="var(--border-bright)" stroke-width="3"/>
+          <line x1="390" y1="114" x2="452" y2="114" stroke="var(--border-bright)" stroke-width="3"/>
+          <line x1="405" y1="135" x2="447" y2="177" stroke="var(--accent)" stroke-width="6" stroke-linecap="round"/>
+          <line x1="447" y1="135" x2="405" y2="177" stroke="var(--accent)" stroke-width="6" stroke-linecap="round"/>
+        </g>
+        <path d="M300 145 h48" stroke="var(--text-dim)" stroke-width="2" opacity="0.4" stroke-dasharray="4 5"/>
+        <path d="M505 145 h48 m-10 -7 l10 7 l-10 7" stroke="var(--credit)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="580" y="70" width="110" height="150" rx="8" fill="var(--surface)" stroke="var(--credit)" stroke-width="2"/>
+        <line x1="600" y1="100" x2="670" y2="100" stroke="var(--credit)" stroke-width="3" opacity="0.5"/>
+        <line x1="600" y1="122" x2="662" y2="122" stroke="var(--border-bright)" stroke-width="3"/>
+        <line x1="600" y1="144" x2="670" y2="144" stroke="var(--border-bright)" stroke-width="3"/>
+        <circle cx="676" cy="84" r="13" fill="var(--credit)"/>
+        <path d="M670 84 l4 4 l8 -8" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </svg>
+  </div>
+  <div class="slide__content">
+    <p class="title-kicker reveal">Kode Health · Audit · AUD-786 / 787 / 788</p>
+    <h1 class="slide__display reveal">Unable<br>to Audit</h1>
+    <p class="slide__subtitle reveal" style="margin-top:20px;">How an audit gets abandoned, the books get repaired,<br>and the work gets replaced</p>
+  </div>
+</section>
+
+<!-- 2 · THE PROBLEM -->
+<section class="slide slide--content" style="background-image:radial-gradient(ellipse at 15% 85%, var(--accent-dim) 0%, transparent 50%);">
+  <div class="slide__inner">
+    <div class="slide__text">
+      <p class="slide__label reveal">The problem</p>
+      <h2 class="slide__heading reveal">An auditor opens an encounter and cannot audit it</h2>
+      <ul class="slide__bullets">
+        <li class="reveal">The chart does not match the encounter, or the encounter itself can never be evaluated</li>
+        <li class="reveal">The audit can never complete, so it must leave every queue <strong>for good</strong></li>
+        <li class="reveal">The chart can no longer be trusted, so it must never be selected again</li>
+        <li class="reveal">The coder's progress <strong>already counted</strong> this audit the moment it was created</li>
+        <li class="reveal">The program still owes the client a real audit in its place</li>
+      </ul>
+    </div>
+    <div class="slide__aside reveal">
+      <div class="stat-card">
+        <div class="stat-card__num" style="color:var(--accent);">1 = 1</div>
+        <div class="stat-card__label">Every program audit carries exactly one progress credit, earned at creation</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · FIVE RIPPLES -->
+<section class="slide slide--with-grid">
+  <p class="slide__label reveal">The subsystem at a glance</p>
+  <h2 class="slide__heading reveal">One click, five ripples</h2>
+  <div class="pipeline reveal">
+    <div class="pipeline__step" style="background:color-mix(in srgb, var(--accent) 4%, var(--surface));">
+      <div class="pipeline__num">01</div>
+      <div class="pipeline__name">Editor action</div>
+      <div class="pipeline__desc">Auditor picks &ldquo;I can't audit this encounter&rdquo; from the evaluation editor's actions menu</div>
+      <div class="pipeline__file">_actions.html.erb</div>
+    </div>
+    <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="pipeline__step" style="background:color-mix(in srgb, var(--accent) 4%, var(--surface));">
+      <div class="pipeline__num">02</div>
+      <div class="pipeline__name">One transaction</div>
+      <div class="pipeline__desc">Stamp the audit, discard its evaluations, retire the chart, decrement the progress bucket</div>
+      <div class="pipeline__file">audit_abandonment_form.rb</div>
+    </div>
+    <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="pipeline__step" style="background:color-mix(in srgb, var(--gold) 5%, var(--surface));">
+      <div class="pipeline__num" style="color:var(--gold);">03</div>
+      <div class="pipeline__name">Events fan out</div>
+      <div class="pipeline__desc">audit.<wbr>abandoned, evaluation.<wbr>discarded, chart.<wbr>deactivated, emitted only after commit</div>
+      <div class="pipeline__file" style="color:var(--gold);background:var(--gold-dim);">EventBus</div>
+    </div>
+    <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="pipeline__step" style="background:color-mix(in srgb, var(--slate) 5%, var(--surface));">
+      <div class="pipeline__num" style="color:var(--slate);">04</div>
+      <div class="pipeline__name">Listeners react</div>
+      <div class="pipeline__desc">Event log persists the trail, cycles re-orchestrate, the replacement job enqueues</div>
+      <div class="pipeline__file" style="color:var(--slate);background:var(--slate-dim);">event_bus.rb</div>
+    </div>
+    <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="pipeline__step" style="background:color-mix(in srgb, var(--credit) 5%, var(--surface));">
+      <div class="pipeline__num" style="color:var(--credit);">05</div>
+      <div class="pipeline__name">Replacement</div>
+      <div class="pipeline__desc">A fresh audit from another eligible chart, created within seconds and auto-assigned</div>
+      <div class="pipeline__file" style="color:var(--credit);background:var(--credit-dim);">abandonment_replacement_job.rb</div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · DIVIDER 01 -->
+<section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 30% 40%, var(--accent-dim) 0%, transparent 45%);">
+  <span class="slide__number">01</span>
+  <div>
+    <h2 class="slide__heading reveal">The entry point</h2>
+    <p class="slide__subtitle reveal" style="margin-top:12px;">A menu action in the evaluation editor</p>
+  </div>
+</section>
+
+<!-- 5 · ENTRY POINT SPLIT -->
+<section class="slide slide--split">
+  <div class="slide__panels">
+    <div class="slide__panel slide__panel--primary">
+      <p class="slide__label reveal">app/controllers/evaluations/abandonments_controller.rb</p>
+      <h2 class="slide__heading reveal" style="font-size:clamp(24px,3.6vw,38px);">Two gates before anything happens</h2>
+      <ul class="slide__bullets">
+        <li class="reveal"><strong>Policy scope.</strong> <code>policy_scope(Evaluation).find</code> hides evaluations the user cannot access before authorization even runs</li>
+        <li class="reveal"><strong>Authorization.</strong> <code>abandon?</code> requires edit rights and refuses canceled audits and revision evaluations outright</li>
+        <li class="reveal">Concurrent races (someone completed or canceled mid-confirm) rescue to a friendly flash instead of a 500</li>
+      </ul>
+    </div>
+    <div class="slide__panel slide__panel--secondary">
+      <div class="slide__code-block reveal">
+        <span class="slide__code-filename">abandonments_controller.rb</span>
+        <pre><code>@evaluation = policy_scope(Evaluation)
+  .find(params[:evaluation_id])
+<span class="hl">authorize</span> @evaluation, <span class="st">:abandon?</span>
+
+AuditAbandonmentForm
+  .new(evaluation: @evaluation, auditor: Current.user)
+  .save!</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 · DIVIDER 02 -->
+<section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 70% 60%, var(--accent-dim) 0%, transparent 45%);">
+  <span class="slide__number">02</span>
+  <div style="text-align:right;">
+    <h2 class="slide__heading reveal">The form</h2>
+    <p class="slide__subtitle reveal" style="margin-top:12px;">AuditAbandonmentForm, one lock, one transaction</p>
+  </div>
+</section>
+
+<!-- 7 · FORM DIAGRAM -->
+<section class="slide slide--diagram">
+  <h2 class="slide__heading reveal">AuditAbandonmentForm#save!</h2>
+  <div class="mermaid-wrap reveal">
+    <div class="zoom-controls">
+      <button onclick="zoomDiagram(this,1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram(this,0.8)" title="Zoom out">&minus;</button>
+      <button onclick="resetZoom(this)" title="Reset">&#8634;</button>
+      <button onclick="openDiagramFullscreen(this)" title="Open full size in new tab">&#x26F6;</button>
+    </div>
+    <pre class="mermaid">
+flowchart TD
+  A["save!"] --> B{"already<br/>abandoned?"}
+  B -->|"yes"| IDEM["return true<br/>idempotent no-op"]
+  B -->|"no"| LOCK["audit.with_lock<br/>re-check abandoned?"]
+  LOCK --> G1{"audit<br/>canceled?"}
+  G1 -->|"yes"| ERR1["raise CanceledAuditError"]
+  G1 -->|"no"| G2{"any completed<br/>active evaluation?"}
+  G2 -->|"yes"| ERR2["raise CompletedEvaluationError"]
+  G2 -->|"no"| AB["audit.abandon!(by: auditor)<br/>stamp + discard active evaluations"]
+  AB --> CH["deactivate_chart<br/>sole match or nothing"]
+  CH --> RP["CreditReversal<br/>reverse the audit&#39;s credit"]
+  RP --> COMMIT["COMMIT"]
+  COMMIT --> EV["emit_events<br/>after commit only"]
+
+  classDef guard fill:#a8741a22,stroke:#a8741a,stroke-width:2px
+  classDef work fill:#b23a2e18,stroke:#b23a2e,stroke-width:2px
+  classDef err fill:#b23a2e10,stroke:#b23a2e,stroke-width:2px,stroke-dasharray:5 4
+  classDef ok fill:#0f7b4d22,stroke:#0f7b4d,stroke-width:2px
+  class B,G1,G2 guard
+  class LOCK,AB,CH,RP work
+  class ERR1,ERR2 err
+  class IDEM,COMMIT,EV ok
+    </pre>
+  </div>
+  <p class="diagram-caption reveal">app/forms/audit_abandonment_form.rb &middot; a raise anywhere inside the lock rolls back every change at once</p>
+</section>
+
+<!-- 8 · TRANSACTION BOUNDARY -->
+<section class="slide slide--content" style="background-image:radial-gradient(ellipse at 85% 15%, var(--gold-dim) 0%, transparent 45%);">
+  <div class="slide__inner slide__inner--flip">
+    <div class="slide__aside reveal">
+      <div class="txn-box">
+        <div class="txn-box__zone">
+          <span class="badge badge--deny">inside the transaction</span>
+          <div class="txn-box__list">abandoned_at stamp<br>evaluation discards<br>chart retirement<br>bucket decrement</div>
+        </div>
+        <div class="txn-box__commit"><span>commit</span></div>
+        <div class="txn-box__zone txn-box__zone--after">
+          <span class="badge badge--gold">after commit</span>
+          <div class="txn-box__list">audit.abandoned<br>evaluation.discarded<br>chart.deactivated</div>
+        </div>
+      </div>
+    </div>
+    <div class="slide__text">
+      <p class="slide__label reveal">Why this shape</p>
+      <h2 class="slide__heading reveal">All or nothing, then tell the world</h2>
+      <ul class="slide__bullets">
+        <li class="reveal">The stamp, the discards, the chart, and the decrement <strong>commit together or not at all</strong></li>
+        <li class="reveal">Events fire only after commit, so listeners never observe uncommitted state</li>
+        <li class="reveal">Chart matching uses <code>.sole</code>: an ambiguous or incomplete composite deactivates <strong>nothing</strong>, logged and moved on</li>
+        <li class="reveal">Re-running the form on an abandoned audit returns true without re-stamping or re-emitting</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 9 · DIVIDER 03 -->
+<section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 40% 30%, var(--gold-dim) 0%, transparent 45%);">
+  <span class="slide__number">03</span>
+  <div>
+    <h2 class="slide__heading reveal">Events &amp; listeners</h2>
+    <p class="slide__subtitle reveal" style="margin-top:12px;">Synchronous in-process fan-out on the EventBus</p>
+  </div>
+</section>
+
+<!-- 10 · FAN-OUT DIAGRAM -->
+<section class="slide slide--diagram">
+  <h2 class="slide__heading reveal">Who hears what</h2>
+  <div class="mermaid-wrap reveal">
+    <div class="zoom-controls">
+      <button onclick="zoomDiagram(this,1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram(this,0.8)" title="Zoom out">&minus;</button>
+      <button onclick="resetZoom(this)" title="Reset">&#8634;</button>
+      <button onclick="openDiagramFullscreen(this)" title="Open full size in new tab">&#x26F6;</button>
+    </div>
+    <pre class="mermaid">
+flowchart TD
+  F["AuditAbandonmentForm<br/>emit_events"] --> E1(["audit.abandoned"])
+  F --> E2(["evaluation.discarded<br/>per discarded evaluation"])
+  F --> E3(["chart.deactivated<br/>when a chart was retired"])
+  E1 --> EW["EventWriter<br/>persists to event_logs"]
+  E2 --> EW
+  E3 --> EW
+  E1 --> RH["ReplacementHandler<br/>enqueue_after_commit"]
+  RH --> RJ["AbandonmentReplacementJob<br/>Sidekiq"]
+  E1 --> BH["BroadcastHandler<br/>live index refresh"]
+  E2 --> BH
+  E2 --> CR["Cycles::ResolutionHandler"]
+  CR --> CJ["ResolutionHandlerJob<br/>re-orchestrates the cycle"]
+
+  classDef ev fill:#a8741a22,stroke:#a8741a,stroke-width:2px
+  classDef sink fill:#33608c18,stroke:#33608c,stroke-width:2px
+  classDef job fill:#0f7b4d22,stroke:#0f7b4d,stroke-width:2px
+  classDef src fill:#b23a2e18,stroke:#b23a2e,stroke-width:2px
+  class E1,E2,E3 ev
+  class EW,BH,RH,CR sink
+  class RJ,CJ job
+  class F src
+    </pre>
+  </div>
+  <p class="diagram-caption reveal">config/initializers/event_bus.rb &middot; the bus is synchronous and in-process, jobs enqueue after all transactions commit</p>
+</section>
+
+<!-- 11 · EVENT CATALOG TABLE -->
+<section class="slide slide--table" style="background-image:radial-gradient(ellipse at 20% 90%, var(--gold-dim) 0%, transparent 45%);">
+  <p class="slide__label reveal">The event trail</p>
+  <h2 class="slide__heading reveal">Five events tell the whole story</h2>
+  <div class="table-wrap reveal" style="flex:0 1 auto; min-height:0; margin-top:clamp(10px,2vh,20px);">
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Event</th><th>Fired when</th><th>Payload highlights</th></tr></thead>
+        <tbody>
+          <tr><td><code>audit.abandoned</code></td><td>The abandonment commits</td><td>audit, evaluation, client, coder, chart kind, program, acting user</td></tr>
+          <tr><td><code>evaluation.discarded</code></td><td>Once per evaluation the abandonment discarded</td><td>evaluation, audit, program, coder<br><small>Also what the revision flow emits, cycles re-resolve on it</small></td></tr>
+          <tr><td><code>chart.deactivated</code></td><td>Only when a sole matching chart was retired</td><td>chart, encounter number, source, deactivated_at</td></tr>
+          <tr><td><code>audit_program.replacement_created</code></td><td>The replacement job creates the new audit</td><td>original audit, replacement audit, program, coder</td></tr>
+          <tr><td><code>audit_program.replacement_skipped</code></td><td>The replacement job declines, every denial</td><td>original audit plus a <strong>reason</strong> string for ops queries</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 12 · DIVIDER 04 -->
+<section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 65% 45%, var(--credit-dim) 0%, transparent 45%);">
+  <span class="slide__number">04</span>
+  <div style="text-align:right;">
+    <h2 class="slide__heading reveal">The books</h2>
+    <p class="slide__subtitle reveal" style="margin-top:12px;">One decrement, one increment, net zero</p>
+  </div>
+</section>
+
+<!-- 13 · LEDGER SPLIT -->
+<section class="slide slide--split">
+  <div class="slide__panels slide__panels--even">
+    <div class="slide__panel slide__panel--primary">
+      <div class="ledger-head reveal">
+        <span class="badge badge--deny">debit</span>
+        <h3>The decrement</h3>
+      </div>
+      <ul class="ledger-list ledger-list--debit">
+        <li class="reveal"><strong>CreditReversal</strong> runs inside the abandon transaction, so it applies exactly once or not at all</li>
+        <li class="reveal">The bucket is the one the audit was credited to: <code>audit_month</code> when present, its creation month otherwise</li>
+        <li class="reveal"><code>decrement_for!</code> takes the same row lock as <code>reserve_slot!</code>, so a concurrent reservation cannot interleave</li>
+        <li class="reveal">Returns <code>:decremented</code>, <code>:no_bucket</code> (expected legacy), or <code>:at_zero</code> (accounting anomaly, logged at warn)</li>
+        <li class="reveal">A DB CHECK keeps <code>credits_count &gt;= 0</code> no matter what</li>
+      </ul>
+    </div>
+    <div class="slide__panel slide__panel--secondary">
+      <div class="ledger-head reveal">
+        <span class="badge badge--allow">credit</span>
+        <h3>The increment</h3>
+      </div>
+      <ul class="ledger-list ledger-list--credit">
+        <li class="reveal">The replacement <strong>reserves</strong> its credit at creation through the same atomic <code>reserve_slot!</code> the trigger batch uses, keyed to the abandoned audit's month</li>
+        <li class="reveal">Whoever reserves first wins the freed slot, so a concurrent trigger batch can never double-fill it</li>
+        <li class="reveal"><strong>ProgressHandlerJob</strong> skips crediting replacements, exactly like trigger audits, but still runs the graduation check</li>
+        <li class="reveal">A failed create (cycle settled, chart claimed) <strong>releases the reservation</strong>, so no phantom credit survives</li>
+        <li class="reveal">Freed slot minus one, replacement plus one: <strong>the coder's target stays whole</strong></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 14 · DIVIDER 05 -->
+<section class="slide slide--divider" style="background-image:radial-gradient(ellipse at 35% 55%, var(--credit-dim) 0%, transparent 45%);">
+  <span class="slide__number">05</span>
+  <div>
+    <h2 class="slide__heading reveal">The replacement</h2>
+    <p class="slide__subtitle reveal" style="margin-top:12px;">AbandonmentReplacementJob, seconds after the click</p>
+  </div>
+</section>
+
+<!-- 15 · REPLACEMENT DIAGRAM -->
+<section class="slide slide--diagram">
+  <h2 class="slide__heading reveal">The replacement pipeline</h2>
+  <div class="mermaid-wrap reveal">
+    <div class="zoom-controls">
+      <button onclick="zoomDiagram(this,1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram(this,0.8)" title="Zoom out">&minus;</button>
+      <button onclick="resetZoom(this)" title="Reset">&#8634;</button>
+      <button onclick="openDiagramFullscreen(this)" title="Open full size in new tab">&#x26F6;</button>
+    </div>
+    <pre class="mermaid">
+flowchart TD
+  P["perform(audit_id)"] --> G0{"found and<br/>abandoned?"}
+  G0 -->|"no"| DROP["log and drop"]
+  G0 -->|"yes"| G1{"replacement<br/>already stamped?"}
+  G1 -->|"yes"| FIN["finalize: assign + emit<br/>a retry finishes, never re-creates"]
+  G1 -->|"no"| EL{"ReplacementEligibility<br/>allowed?"}
+  EL -->|"deny"| SK1["replacement_skipped<br/>with the deny code"]
+  EL -->|"allow"| PICK{"eligible chart?<br/>oldest in the window"}
+  PICK -->|"none"| SK2["skip :no_eligible_chart"]
+  PICK -->|"found"| RSV{"reserve_slot!<br/>atomic credit reservation"}
+  RSV -->|"bucket at target"| SK3["skip :quota_full"]
+  RSV -->|"reserved"| CR["Audits::Creator<br/>attaches the cycle, both cadences<br/>re-checks settled? under the lock<br/>stamps replaced_audit_id"]
+  CR -->|"failed"| REL["release the reservation<br/>skip :cycle_settled or :chart_unavailable"]
+  CR --> ASGN["AssignmentRules::Assigner<br/>normal auto-assignment"]
+  ASGN --> DONE["emit replacement_created"]
+
+  classDef guard fill:#a8741a22,stroke:#a8741a,stroke-width:2px
+  classDef skip fill:#b23a2e10,stroke:#b23a2e,stroke-width:2px,stroke-dasharray:5 4
+  classDef work fill:#33608c18,stroke:#33608c,stroke-width:2px
+  classDef ok fill:#0f7b4d22,stroke:#0f7b4d,stroke-width:2px
+  class G0,G1,EL,PICK,RSV guard
+  class DROP,SK1,SK2,SK3,REL skip
+  class FIN ok
+  class CR,ASGN work
+  class P,DONE ok
+    </pre>
+  </div>
+  <p class="diagram-caption reveal">app/sidekiq/audit_programs/abandonment_replacement_job.rb &middot; eligibility is checked at perform time, when the world may have moved on</p>
+</section>
+
+<!-- 16 · ELIGIBILITY CODES GRID -->
+<section class="slide slide--with-grid">
+  <p class="slide__label reveal">Replacement eligibility</p>
+  <h2 class="slide__heading reveal">Nine reasons, two answers</h2>
+  <div class="codes-grid reveal">
+    <div class="code-card code-card--allow"><span class="badge badge--allow">allow</span><div class="code-card__name">active_membership</div><div class="code-card__desc">Coder still in the program, below target</div></div>
+    <div class="code-card code-card--allow"><span class="badge badge--allow">allow</span><div class="code-card__name">graduated_backfill</div><div class="code-card__desc">Coder already graduated, backfill keeps the record whole</div></div>
+    <div class="code-card code-card--deny"><span class="badge badge--deny">deny</span><div class="code-card__name">no_program</div><div class="code-card__desc">Manual audit with no program to repay</div></div>
+    <div class="code-card code-card--deny"><span class="badge badge--deny">deny</span><div class="code-card__name">coder_deactivated</div><div class="code-card__desc">No coder, or the coder left</div></div>
+    <div class="code-card code-card--deny"><span class="badge badge--deny">deny</span><div class="code-card__name">no_membership</div><div class="code-card__desc">Coder was never enrolled in this program</div></div>
+    <div class="code-card code-card--deny"><span class="badge badge--deny">deny</span><div class="code-card__name">zero_target</div><div class="code-card__desc">One-off programs have nothing to refill</div></div>
+    <div class="code-card code-card--deny"><span class="badge badge--deny">deny</span><div class="code-card__name">membership_paused</div><div class="code-card__desc">Paused coders get no new work</div></div>
+    <div class="code-card code-card--deny"><span class="badge badge--deny">deny</span><div class="code-card__name">cycle_settled</div><div class="code-card__desc">That month already released to Platform, history is closed</div></div>
+    <div class="code-card code-card--deny"><span class="badge badge--deny">deny</span><div class="code-card__name">quota_full</div><div class="code-card__desc">The atomic slot reservation found the bucket already back at target</div></div>
+  </div>
+</section>
+
+<!-- 17 · PROGRAMS & GRADUATION -->
+<section class="slide slide--content" style="background-image:radial-gradient(ellipse at 80% 80%, var(--credit-dim) 0%, transparent 50%);">
+  <div class="slide__inner">
+    <div class="slide__text">
+      <p class="slide__label reveal">Programs &amp; graduation</p>
+      <h2 class="slide__heading reveal">The graduated coder is the common case</h2>
+      <ul class="slide__bullets">
+        <li class="reveal">Coders graduate the moment their <strong>final audit is created</strong>, not when it is completed</li>
+        <li class="reveal">Most audits generate early in the month, so by audit time the coder is often already active in the next program</li>
+        <li class="reveal">The replacement is created <strong>back in the graduated program</strong>, from a chart coded in that window, so graduation stays based on real audits</li>
+        <li class="reveal">Auditors work oldest-first, so the backfill surfaces right away</li>
+      </ul>
+    </div>
+    <div class="slide__aside reveal">
+      <div class="stat-card">
+        <div class="stat-card__num" style="color:var(--credit);">10 / 10</div>
+        <div class="stat-card__label">The graduated program's audit count stays whole, every credit backed by a real evaluation</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 18 · CYCLES SPLIT -->
+<section class="slide slide--split">
+  <div class="slide__panels slide__panels--even">
+    <div class="slide__panel slide__panel--primary">
+      <div class="ledger-head reveal">
+        <span class="badge badge--slate">monthly cycles</span>
+      </div>
+      <h3 class="reveal" style="font-size:clamp(20px,2.8vw,32px); font-weight:700; margin:0 0 10px; letter-spacing:-0.6px;">Backfill the month, never the released</h3>
+      <ul class="ledger-list ledger-list--credit">
+        <li class="reveal">Replacements are stamped with the abandoned audit's <strong>month and cycle</strong>, so attribution lands in the right period</li>
+        <li class="reveal">A settled cycle (released or externally rejected) <strong>denies the replacement</strong>, and the cycle row is re-locked at create time to re-check</li>
+        <li class="reveal">Anything already exported to Platform is immutable, cycles are built from completed evaluations and the abandoned one is discarded</li>
+      </ul>
+    </div>
+    <div class="slide__panel slide__panel--secondary">
+      <div class="ledger-head reveal">
+        <span class="badge badge--gold">initial cycles</span>
+      </div>
+      <h3 class="reveal" style="font-size:clamp(20px,2.8vw,32px); font-weight:700; margin:0 0 10px; letter-spacing:-0.6px;">The replacement is the fast path</h3>
+      <ul class="ledger-list ledger-list--debit">
+        <li class="reveal">An initial cycle reaches review only through <code>target_met?</code>, which counts <strong>completed evaluations</strong></li>
+        <li class="reveal">Abandon one of ten and the backfill refills the tenth slot <strong>within seconds</strong>, keeping the cycle on the normal road to review</li>
+        <li class="reveal">When no chart exists to backfill, the cycle <strong>closes short</strong> instead of waiting forever, next slide</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 18b · CLOSING SHORT -->
+<section class="slide slide--content" style="background-image:radial-gradient(ellipse at 20% 20%, var(--gold-dim) 0%, transparent 50%);">
+  <div class="slide__inner">
+    <div class="slide__text">
+      <p class="slide__label reveal">When no chart exists</p>
+      <h2 class="slide__heading reveal">A cycle that can't fill closes short</h2>
+      <ul class="slide__bullets">
+        <li class="reveal"><code>closed?</code> means the cycle can no longer receive evaluations: an <strong>elapsed period</strong> for monthly, a <strong>completed membership</strong> for initial, and no audit still open, counting <strong>every audit of the coder in the program</strong>, attached to the cycle or not</li>
+        <li class="reveal">The nightly <strong>PeriodRolloverJob</strong> sweeps unapproved cycles past their intake window and hands closed ones to the Orchestrator</li>
+        <li class="reveal">A short cycle faces the same gates as a full one: below threshold <strong>holds for external review</strong>, at or above auto-releases</li>
+        <li class="reveal">Settling closes the backfill window: a late replacement re-checks <code>settled?</code> under the cycle lock and stands down</li>
+      </ul>
+    </div>
+    <div class="slide__aside reveal">
+      <div class="stat-card">
+        <div class="stat-card__num" style="color:var(--gold);">9 / 10</div>
+        <div class="stat-card__label">A short initial cycle still reaches review and release. The target never shrinks, the intake window closes around it</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 19 · EDGE CASES TABLE -->
+<section class="slide slide--table" style="background-image:radial-gradient(ellipse at 80% 10%, var(--accent-dim) 0%, transparent 45%);">
+  <p class="slide__label reveal">Edge cases</p>
+  <h2 class="slide__heading reveal">What can go sideways, and what answers it</h2>
+  <div class="table-wrap reveal" style="flex:0 1 auto; min-height:0; margin-top:clamp(10px,2vh,20px);">
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Scenario</th><th>Defense</th><th style="width:12%;">Status</th></tr></thead>
+        <tbody>
+          <tr><td>Trigger batch refills the freed slot before or during the job</td><td>The job reserves the slot with the same atomic <code>reserve_slot!</code> the trigger uses, whoever reserves first wins, the loser stands down with <code>quota_full</code></td><td><span class="badge badge--allow">guarded</span></td></tr>
+          <tr><td>Crash between creating the replacement and assigning it</td><td><code>replaced_audit_id</code> stamped at create, unique index, the retry finalizes assignment and events instead of re-creating or skipping</td><td><span class="badge badge--allow">guarded</span></td></tr>
+          <tr><td>A release races the backfill into a settling cycle</td><td>Replacements attach to the cycle at creation for both cadences, <code>settled?</code> re-checked under the cycle lock, a failed create releases the reserved credit</td><td><span class="badge badge--allow">guarded</span></td></tr>
+          <tr><td>The rollover closes an initial cycle while its newest audit is still unattached</td><td><code>closed?</code> counts every audit of the coder in the program, not just cycle-attached ones, so open backfills and fresh trigger audits block closure</td><td><span class="badge badge--allow">guarded</span></td></tr>
+          <tr><td>A replacement credit lands in a different bucket than the reversal</td><td>One shared anchor, <code>Audit#progress_anchor</code>, keys crediting, reversal, and replacement targeting</td><td><span class="badge badge--allow">guarded</span></td></tr>
+          <tr><td>Admin bumped the month with Add More audits</td><td>Quota math counts the requested increase as headroom, the freed slot still refills</td><td><span class="badge badge--allow">guarded</span></td></tr>
+          <tr><td>No unused chart exists at replacement time</td><td>Skip event logged. Active coders self-heal at the next trigger batch, and a graduated coder's initial cycle closes short for the nightly rollover to resolve</td><td><span class="badge badge--allow">guarded</span></td></tr>
+          <tr><td>Abandoning a revision would bury its completed parent</td><td>The abandon policy refuses revisions, Discard (which restores the parent) stays the only exit</td><td><span class="badge badge--allow">guarded</span></td></tr>
+          <tr><td>Add More on a past month never credits the bucket</td><td>Pre-existing counting gap, documented in ADD_MORE_BUCKET_UNDERCOUNT.md for a future fix</td><td><span class="badge badge--deny">known gap</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 20 · FULL BLEED -->
+<section class="slide slide--bleed">
+  <div class="slide__bg slide__bg--gradient"></div>
+  <div class="bleed-art" aria-hidden="true">
+    <svg viewBox="0 0 400 300" fill="none" stroke="#f5efe6" stroke-width="3" stroke-linecap="round">
+      <line x1="200" y1="40" x2="200" y2="250"/>
+      <line x1="60" y1="80" x2="340" y2="80"/>
+      <path d="M60 80 l-34 70 a34 20 0 0 0 68 0 z" fill="rgba(245,239,230,0.08)"/>
+      <path d="M340 80 l-34 70 a34 20 0 0 0 68 0 z" fill="rgba(245,239,230,0.08)"/>
+      <rect x="48" y="118" width="24" height="24" rx="4" fill="#e05a4a" stroke="none"/>
+      <rect x="328" y="118" width="24" height="24" rx="4" fill="#3dbf85" stroke="none"/>
+      <path d="M150 250 h100" stroke-width="5"/>
+    </svg>
+  </div>
+  <div class="slide__scrim"></div>
+  <div class="slide__content">
+    <p class="slide__label reveal" style="color:rgba(245,239,230,0.65);">The invariant</p>
+    <h2 class="slide__heading reveal" style="font-size:clamp(30px,5vw,54px); max-width:14em;">Every abandonment leaves the books balanced</h2>
+    <p class="slide__subtitle reveal" style="color:rgba(245,239,230,0.65); margin-top:14px;">One decrement, one replacement, one truthful event trail</p>
+  </div>
+</section>
+
+</div><!-- /deck -->
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'base',
+    look: 'classic',
+    flowchart: { htmlLabels: true, padding: 18 },
+    themeVariables: {
+      primaryColor: isDark ? '#2d2620' : '#ffffff',
+      primaryBorderColor: isDark ? '#a2988a' : '#7b7264',
+      primaryTextColor: isDark ? '#f0e9df' : '#26211b',
+      secondaryColor: isDark ? '#231e19' : '#f3ede3',
+      secondaryBorderColor: isDark ? '#7aa3cc' : '#33608c',
+      secondaryTextColor: isDark ? '#f0e9df' : '#26211b',
+      tertiaryColor: isDark ? '#1d2b24' : '#f0f7f2',
+      tertiaryBorderColor: isDark ? '#3dbf85' : '#0f7b4d',
+      tertiaryTextColor: isDark ? '#f0e9df' : '#26211b',
+      lineColor: isDark ? '#a2988a' : '#8d8374',
+      fontSize: '15px',
+      fontFamily: "'Fragment Mono', 'SF Mono', monospace",
+      clusterBkg: isDark ? '#231e19' : '#f3ede3',
+      edgeLabelBackground: isDark ? '#191512' : '#faf7f2'
+    }
+  });
+
+  function autoFit() {
+    document.querySelectorAll('.mermaid svg').forEach(function(svg) {
+      svg.removeAttribute('height');
+      svg.removeAttribute('width');
+      svg.style.width = 'auto';
+      svg.style.height = 'auto';
+      svg.style.maxWidth = '100%';
+      svg.style.maxHeight = '100%';
+    });
+    var mCanvas = document.createElement('canvas');
+    var mCtx = mCanvas.getContext('2d');
+    document.querySelectorAll('.mermaid .nodeLabel').forEach(function(el) {
+      var fo = el.closest('foreignObject');
+      if (!fo) return;
+      var cs = getComputedStyle(el);
+      mCtx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+      var max = 0;
+      el.innerText.split('\n').forEach(function(line) {
+        max = Math.max(max, mCtx.measureText(line).width);
+      });
+      var w = parseFloat(fo.getAttribute('width'));
+      if (max > w - 8) {
+        el.style.display = 'inline-block';
+        el.style.transform = 'scale(' + Math.max((w - 10) / max, 0.6) + ')';
+        el.style.transformOrigin = 'center center';
+      }
+    });
+    document.querySelectorAll('.stat-card__num').forEach(function(el) {
+      if (el.scrollWidth > el.clientWidth) {
+        var s = el.clientWidth / el.scrollWidth;
+        el.style.transform = 'scale(' + s + ')';
+        el.style.transformOrigin = 'left top';
+      }
+    });
+  }
+
+  document.fonts.ready.then(function() {
+    return mermaid.run({ querySelector: '.mermaid' });
+  }).then(function() {
+    autoFit();
+    new SlideEngine();
+  }).catch(function(err) {
+    console.error('Mermaid failed, starting engine anyway', err);
+    autoFit();
+    new SlideEngine();
+  });
+</script>
+
+<script>
+  var INITIAL_ZOOM = 1;
+  function zoomDiagram(b,f){var w=b.closest('.mermaid-wrap');var t=w.querySelector('.mermaid');var c=parseFloat(t.dataset.zoom||INITIAL_ZOOM);var n=Math.min(Math.max(c*f,0.5),5);t.dataset.zoom=n;t.style.zoom=n;}
+  function resetZoom(b){var w=b.closest('.mermaid-wrap');var t=w.querySelector('.mermaid');t.dataset.zoom=INITIAL_ZOOM;t.style.zoom=INITIAL_ZOOM;}
+  function openDiagramFullscreen(b){openMermaidInNewTab(b.closest('.mermaid-wrap'));}
+  function openMermaidInNewTab(w){var svg=w.querySelector('.mermaid svg');if(!svg)return;var clone=svg.cloneNode(true);clone.style.zoom='';clone.style.transform='';var styles=getComputedStyle(document.documentElement);var bg=styles.getPropertyValue('--bg').trim()||'#ffffff';var html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Diagram</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:'+bg+';padding:40px;box-sizing:border-box}svg{max-width:100%;max-height:90vh;height:auto}</style></head><body>'+clone.outerHTML+'</body></html>';window.open(URL.createObjectURL(new Blob([html],{type:'text/html'})),'_blank');}
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.mermaid-wrap').forEach(function(w){
+      w.addEventListener('wheel',function(e){if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();var t=w.querySelector('.mermaid');var c=parseFloat(t.dataset.zoom||INITIAL_ZOOM);var f=e.deltaY<0?1.1:0.9;var n=Math.min(Math.max(c*f,0.5),5);t.dataset.zoom=n;t.style.zoom=n;},{passive:false});
+      var sX,sY,sL,sT,sTime,didPan;
+      w.addEventListener('mousedown',function(e){if(e.target.closest('.zoom-controls'))return;w.classList.add('is-panning');sX=e.clientX;sY=e.clientY;sL=w.scrollLeft;sT=w.scrollTop;sTime=Date.now();didPan=false;});
+      window.addEventListener('mousemove',function(e){if(!w.classList.contains('is-panning'))return;var dx=e.clientX-sX,dy=e.clientY-sY;if(Math.abs(dx)>5||Math.abs(dy)>5)didPan=true;w.scrollLeft=sL-dx;w.scrollTop=sT-dy;});
+      window.addEventListener('mouseup',function(){if(!w.classList.contains('is-panning'))return;w.classList.remove('is-panning');if(!didPan&&Date.now()-sTime<300)openMermaidInNewTab(w);});
+    });
+  });
+
+  function SlideEngine(){
+    this.deck=document.querySelector('.deck');
+    this.slides=[].slice.call(document.querySelectorAll('.slide'));
+    this.current=0;
+    this.total=this.slides.length;
+    this.buildChrome();
+    this.bindEvents();
+    this.observe();
+    this.update();
+  }
+  SlideEngine.prototype.buildChrome=function(){
+    var bar=document.createElement('div');bar.className='deck-progress';document.body.appendChild(bar);this.bar=bar;
+    var dots=document.createElement('div');dots.className='deck-dots';var self=this;
+    this.slides.forEach(function(_,i){var d=document.createElement('button');d.className='deck-dot';d.title='Slide '+(i+1);d.onclick=function(){self.goTo(i);};dots.appendChild(d);});
+    document.body.appendChild(dots);this.dots=[].slice.call(dots.children);
+    var ctr=document.createElement('div');ctr.className='deck-counter';document.body.appendChild(ctr);this.counter=ctr;
+    var hints=document.createElement('div');hints.className='deck-hints';hints.textContent='← → or scroll to navigate';document.body.appendChild(hints);this.hints=hints;
+    this.hintTimer=setTimeout(function(){hints.classList.add('faded');},4000);
+  };
+  SlideEngine.prototype.bindEvents=function(){
+    var self=this;
+    document.addEventListener('keydown',function(e){
+      if(e.target.closest('.mermaid-wrap,.table-scroll,.code-scroll,input,textarea,[contenteditable]'))return;
+      if(['ArrowDown','ArrowRight',' ','PageDown'].indexOf(e.key)>-1){e.preventDefault();self.next();}
+      else if(['ArrowUp','ArrowLeft','PageUp'].indexOf(e.key)>-1){e.preventDefault();self.prev();}
+      else if(e.key==='Home'){e.preventDefault();self.goTo(0);}
+      else if(e.key==='End'){e.preventDefault();self.goTo(self.total-1);}
+      self.fadeHints();
+    });
+    var tY;
+    this.deck.addEventListener('touchstart',function(e){tY=e.touches[0].clientY;},{passive:true});
+    this.deck.addEventListener('touchend',function(e){var dy=tY-e.changedTouches[0].clientY;if(Math.abs(dy)>50){dy>0?self.next():self.prev();}});
+  };
+  SlideEngine.prototype.observe=function(){
+    var self=this;
+    var obs=new IntersectionObserver(function(entries){entries.forEach(function(entry){if(entry.isIntersecting){entry.target.classList.add('visible');self.current=self.slides.indexOf(entry.target);self.update();}});},{threshold:0.5});
+    this.slides.forEach(function(s){obs.observe(s);});
+  };
+  SlideEngine.prototype.goTo=function(i){this.slides[Math.max(0,Math.min(i,this.total-1))].scrollIntoView({behavior:'smooth'});};
+  SlideEngine.prototype.next=function(){if(this.current<this.total-1)this.goTo(this.current+1);};
+  SlideEngine.prototype.prev=function(){if(this.current>0)this.goTo(this.current-1);};
+  SlideEngine.prototype.update=function(){
+    this.bar.style.width=((this.current+1)/this.total*100)+'%';
+    var c=this.current;this.dots.forEach(function(d,i){d.classList.toggle('active',i===c);});
+    this.counter.textContent=(this.current+1)+' / '+this.total;
+  };
+  SlideEngine.prototype.fadeHints=function(){clearTimeout(this.hintTimer);this.hints.classList.add('faded');};
+</script>
+</body>
+</html>
