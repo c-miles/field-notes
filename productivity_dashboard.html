@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Productivity Dashboard · Field Notes</title>
+<!-- surf unavailable this session, CSS gradient + SVG decor fallback -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── Midnight Editorial: deep navy, warm gold, serif display ── */
+  :root {
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+    --bg: #0f1729;
+    --surface: #162040;
+    --surface2: #1d2b52;
+    --surface-elevated: #243362;
+    --border: rgba(200, 180, 140, 0.10);
+    --border-bright: rgba(200, 180, 140, 0.22);
+    --text: #e8e4d8;
+    --text-dim: #aea791;
+    --accent: #d4a73a;
+    --accent-dim: rgba(212, 167, 58, 0.10);
+    --good: #7fb069;
+    --code-bg: #0a0f1e;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #faf8f2;
+      --surface: #ffffff;
+      --surface2: #f3eee2;
+      --surface-elevated: #fffdf5;
+      --border: rgba(30, 30, 50, 0.10);
+      --border-bright: rgba(30, 30, 50, 0.20);
+      --text: #1a1814;
+      --text-dim: #6e685c;
+      --accent: #a97c0a;
+      --accent-dim: rgba(184, 134, 11, 0.08);
+      --good: #4a7a3a;
+      --code-bg: #2a2520;
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { height: 100%; }
+  body {
+    font-family: var(--font-display);
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* ── Deck engine ── */
+  .deck {
+    height: 100dvh;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+  .slide {
+    height: 100dvh;
+    scroll-snap-align: start;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px);
+    isolation: isolate;
+    /* Opacity-only entrance: transforming the 100dvh snap target itself
+       makes content visibly shift after the scroll settles. */
+    opacity: 0;
+    transition: opacity .6s cubic-bezier(0.16,1,0.3,1);
+  }
+  .slide.visible { opacity: 1; }
+  .slide .reveal {
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .55s cubic-bezier(0.16,1,0.3,1), transform .55s cubic-bezier(0.16,1,0.3,1);
+  }
+  .slide.visible .reveal { opacity: 1; transform: none; }
+  .slide.visible .reveal:nth-child(1) { transition-delay: .10s; }
+  .slide.visible .reveal:nth-child(2) { transition-delay: .20s; }
+  .slide.visible .reveal:nth-child(3) { transition-delay: .30s; }
+  .slide.visible .reveal:nth-child(4) { transition-delay: .40s; }
+  .slide.visible .reveal:nth-child(5) { transition-delay: .50s; }
+  .slide.visible .reveal:nth-child(6) { transition-delay: .60s; }
+  @media (prefers-reduced-motion: reduce) {
+    .slide, .slide .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  }
+
+  /* ── Typography ── */
+  .slide__display {
+    font-size: clamp(52px, 9vw, 116px);
+    font-weight: 400;
+    letter-spacing: -1px;
+    line-height: 0.98;
+    text-wrap: balance;
+  }
+  .slide__heading {
+    font-size: clamp(30px, 4.6vw, 52px);
+    font-weight: 400;
+    letter-spacing: -0.5px;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+  .slide__heading em, .slide__display em { color: var(--accent); font-style: italic; }
+  .slide__body { font-size: clamp(16px, 2.1vw, 23px); line-height: 1.6; color: var(--text-dim); }
+  .slide__label {
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.2vw, 13px);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: var(--accent);
+    margin-bottom: clamp(12px, 2vh, 22px);
+  }
+  .slide__subtitle {
+    font-family: var(--font-mono);
+    font-size: clamp(13px, 1.7vw, 18px);
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Backgrounds ── */
+  .glow-top    { background-image: radial-gradient(ellipse 90% 55% at 50% -10%, var(--accent-dim) 0%, transparent 60%); }
+  .glow-left   { background-image: radial-gradient(ellipse 60% 80% at -10% 70%, var(--accent-dim) 0%, transparent 55%); }
+  .glow-right  { background-image: radial-gradient(ellipse 60% 80% at 110% 30%, var(--accent-dim) 0%, transparent 55%); }
+  .glow-bottom { background-image: radial-gradient(ellipse 90% 55% at 50% 115%, var(--accent-dim) 0%, transparent 60%); }
+
+  .slide__decor { position: absolute; pointer-events: none; z-index: 0; }
+  .slide__decor--tr { top: 0; right: 0; }
+  .slide__decor--bl { bottom: 0; left: 0; transform: rotate(180deg); }
+
+  /* ── Title ── */
+  .slide--title { justify-content: center; align-items: center; text-align: center; }
+  .slide--title .slide__subtitle { margin-top: clamp(18px, 3vh, 30px); }
+  .title-rule {
+    width: clamp(80px, 12vw, 160px); height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    margin: clamp(20px, 3.5vh, 36px) auto 0;
+  }
+
+  /* ── Divider ── */
+  .slide--divider { justify-content: center; align-items: flex-start; }
+  .slide--divider .slide__number {
+    font-size: clamp(120px, 24vw, 280px);
+    font-weight: 400; font-style: italic;
+    line-height: 0.85; opacity: 0.07;
+    position: absolute; top: 50%; left: 55%;
+    transform: translate(-50%, -55%);
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Content ── */
+  .slide--content .slide__inner {
+    display: grid; grid-template-columns: 3fr 2fr;
+    gap: clamp(24px, 4vw, 64px); align-items: center; width: 100%;
+  }
+  .slide--content .slide__inner > * { min-width: 0; }
+  .slide--content.right-heavy .slide__inner { grid-template-columns: 2fr 3fr; }
+  .slide__bullets { list-style: none; padding: 0; margin-top: clamp(14px, 2.5vh, 26px); }
+  .slide__bullets li {
+    padding: clamp(7px, 1.2vh, 12px) 0 clamp(7px, 1.2vh, 12px) 26px;
+    position: relative;
+    font-size: clamp(16px, 1.9vw, 22px);
+    line-height: 1.55; color: var(--text-dim);
+    overflow-wrap: break-word;
+  }
+  .slide__bullets li::before {
+    content: ''; position: absolute; left: 0; top: calc(clamp(7px,1.2vh,12px) + 0.62em);
+    width: 7px; height: 7px; transform: rotate(45deg);
+    background: var(--accent);
+  }
+  .slide__bullets strong { color: var(--text); font-weight: 400; }
+  .slide__bullets code, .slide__body code, td code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    padding: 1px 7px; border-radius: 5px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  /* ── Aside quote cards ── */
+  .qcard-stack { display: flex; flex-direction: column; gap: clamp(14px, 2.5vh, 24px); }
+  .qcard {
+    background: var(--surface-elevated);
+    border: 1px solid var(--border-bright);
+    border-radius: 14px;
+    padding: clamp(18px, 3vh, 30px) clamp(18px, 2.4vw, 30px);
+    font-size: clamp(19px, 2.4vw, 28px);
+    font-style: italic; line-height: 1.3;
+    box-shadow: 0 24px 56px -32px rgba(0,0,0,0.55);
+    position: relative;
+  }
+  .qcard::before {
+    content: '';
+    display: block;
+    width: 9px; height: 9px;
+    transform: rotate(45deg);
+    background: var(--accent);
+    margin-bottom: clamp(10px, 1.8vh, 16px);
+  }
+  .qcard small {
+    display: block; margin-top: 10px;
+    font-family: var(--font-mono); font-style: normal;
+    font-size: clamp(10px, 1.1vw, 12px);
+    letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim);
+  }
+
+  /* ── Formula slide ── */
+  .formulas { display: flex; flex-direction: column; gap: clamp(16px, 3vh, 28px); width: 100%; max-width: 1050px; margin: clamp(18px, 3vh, 30px) auto 0; }
+  .formula {
+    display: grid; grid-template-columns: 1fr auto 1fr auto 1.2fr;
+    align-items: center; gap: clamp(8px, 1.4vw, 18px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: clamp(18px, 3.4vh, 34px) clamp(18px, 2.6vw, 36px);
+    box-shadow: 0 24px 60px -36px rgba(0,0,0,0.55);
+  }
+  .formula > * { min-width: 0; }
+  .formula .term { text-align: center; }
+  .formula .term b {
+    display: block; font-weight: 400;
+    font-size: clamp(17px, 2.2vw, 27px); line-height: 1.15; text-wrap: balance;
+  }
+  .formula .term small {
+    display: block; margin-top: 6px;
+    font-family: var(--font-mono); font-size: clamp(9px, 1vw, 11px);
+    letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-dim);
+  }
+  .formula .op { font-size: clamp(22px, 3vw, 36px); color: var(--accent); font-style: italic; }
+  .formula .result b { color: var(--accent); }
+
+  /* ── Tables ── */
+  .slide--table { padding: clamp(24px, 4vh, 48px) clamp(28px, 5vw, 80px); }
+  .table-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
+  table.data {
+    width: 100%; border-collapse: collapse;
+    font-size: clamp(14px, 1.75vw, 20px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px -36px rgba(0,0,0,0.55);
+  }
+  table.data th {
+    font-family: var(--font-mono);
+    font-size: clamp(9px, 1.15vw, 12px);
+    letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--accent); text-align: left;
+    padding: clamp(10px, 1.6vh, 16px) clamp(14px, 1.8vw, 24px);
+    border-bottom: 1px solid var(--border-bright);
+    background: var(--surface2);
+  }
+  table.data td {
+    padding: clamp(8px, 1.35vh, 14px) clamp(14px, 1.8vw, 24px);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  table.data tr:last-child td { border-bottom: none; }
+  table.data tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
+  table.data td:first-child { color: var(--text); }
+  table.data .num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.9em; }
+  table.data .hot { color: var(--accent); font-weight: 600; }
+  .table-note {
+    margin-top: clamp(10px, 1.8vh, 18px);
+    font-family: var(--font-mono);
+    font-size: clamp(10px, 1.2vw, 13px);
+    color: var(--text-dim); letter-spacing: 0.4px;
+  }
+
+  /* ── Split ── */
+  .slide--split { padding: 0; }
+  .slide--split .slide__panels { display: grid; grid-template-columns: 3fr 2fr; height: 100%; }
+  .slide--split .slide__panels > * { min-width: 0; }
+  .slide--split .slide__panel {
+    padding: clamp(36px, 6vh, 76px) clamp(30px, 4.5vw, 68px);
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .slide--split .slide__panel--primary { background: transparent; }
+  .slide--split .slide__panel--secondary { background: var(--surface); border-left: 1px solid var(--border); }
+
+  /* ── Pipeline ── */
+  .pipeline { display: flex; align-items: stretch; gap: 0; flex: 0 1 auto; min-height: 0; margin-top: clamp(16px, 3vh, 30px); }
+  .pipeline__step {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: 12px;
+    padding: clamp(14px, 2.4vh, 26px) clamp(12px, 1.4vw, 20px);
+    display: flex; flex-direction: column;
+    min-width: 0; overflow-wrap: break-word;
+    box-shadow: 0 18px 44px -30px rgba(0,0,0,0.5);
+  }
+  .pipeline__num {
+    font-family: var(--font-display); font-style: italic;
+    font-size: clamp(15px, 1.9vw, 22px);
+    color: var(--accent); letter-spacing: 0.5px;
+  }
+  .pipeline__name { font-size: clamp(16px, 1.9vw, 23px); margin: clamp(4px, .8vh, 8px) 0; line-height: 1.15; }
+  .pipeline__desc { font-family: var(--font-mono); font-size: clamp(10px, 1.15vw, 13.5px); color: var(--text-dim); line-height: 1.55; flex: 1; }
+  .pipeline__file {
+    font-family: var(--font-mono);
+    font-size: clamp(9px, 1vw, 11.5px);
+    color: var(--accent); background: var(--accent-dim);
+    padding: 3px 9px; border-radius: 5px;
+    margin-top: clamp(8px, 1.4vh, 14px); align-self: flex-start;
+    letter-spacing: 0.5px;
+  }
+  .pipeline__arrow { display: flex; align-items: center; padding: 0 clamp(3px, .4vw, 7px); color: var(--accent); flex-shrink: 0; opacity: .45; }
+
+  /* ── Decision grid ── */
+  .grid-2x2 {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: clamp(12px, 2vw, 24px);
+    margin-top: clamp(16px, 3vh, 28px);
+  }
+  .grid-2x2 > * { min-width: 0; }
+  .dcard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: clamp(16px, 2.8vh, 30px) clamp(16px, 2vw, 28px);
+    box-shadow: 0 18px 44px -30px rgba(0,0,0,0.5);
+  }
+  .dcard h3 { font-weight: 400; font-size: clamp(18px, 2.2vw, 26px); margin-bottom: clamp(6px, 1vh, 10px); }
+  .dcard h3 span { color: var(--accent); font-style: italic; }
+  .dcard p { font-family: var(--font-mono); font-size: clamp(11px, 1.25vw, 14.5px); line-height: 1.6; color: var(--text-dim); overflow-wrap: break-word; }
+
+  /* ── Vertical steps (reassign flow) ── */
+  .vsteps { display: flex; flex-direction: column; gap: clamp(8px, 1.4vh, 14px); }
+  .vstep {
+    display: grid; grid-template-columns: auto 1fr; gap: clamp(12px, 1.6vw, 20px);
+    align-items: center;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(12px, 2vh, 20px) clamp(14px, 1.8vw, 24px);
+  }
+  .vstep > * { min-width: 0; }
+  .vstep .n {
+    font-family: var(--font-mono); font-size: clamp(11px, 1.3vw, 14px);
+    color: var(--accent); font-weight: 600;
+    width: clamp(26px, 3vw, 34px); height: clamp(26px, 3vw, 34px);
+    border: 1px solid var(--border-bright); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .vstep .t { font-size: clamp(14px, 1.7vw, 19px); line-height: 1.35; color: var(--text); overflow-wrap: break-word; }
+  .vstep .t code { font-size: 0.78em; }
+
+  /* ── Stat band ── */
+  .stat-band {
+    display: flex; gap: clamp(20px, 4vw, 64px);
+    margin: clamp(16px, 3vh, 30px) 0;
+    flex-wrap: wrap;
+  }
+  .stat { min-width: 0; }
+  .stat .v {
+    font-size: clamp(44px, 6.5vw, 88px);
+    line-height: 1; color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .k {
+    font-family: var(--font-mono);
+    font-size: clamp(9px, 1.1vw, 12px);
+    letter-spacing: 1.8px; text-transform: uppercase;
+    color: var(--text-dim); margin-top: 8px;
+  }
+
+  /* ── Full bleed close ── */
+  .slide--bleed { padding: 0; justify-content: flex-end; }
+  .slide--bleed .slide__bg {
+    position: absolute; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 70% 60% at 75% 20%, rgba(212,167,58,0.16) 0%, transparent 55%),
+      radial-gradient(ellipse 60% 50% at 15% 85%, rgba(212,167,58,0.10) 0%, transparent 55%),
+      linear-gradient(160deg, #0f1729 0%, #131e3a 45%, #0a0f1e 100%);
+  }
+  @media (prefers-color-scheme: light) {
+    .slide--bleed .slide__bg {
+      background:
+        radial-gradient(ellipse 70% 60% at 75% 20%, rgba(169,124,10,0.14) 0%, transparent 55%),
+        linear-gradient(160deg, #faf8f2 0%, #f3eee2 55%, #ece4d2 100%);
+    }
+  }
+  .slide--bleed .slide__content {
+    position: relative; z-index: 2;
+    padding: clamp(40px, 7vh, 90px) clamp(40px, 8vw, 120px);
+  }
+  .phases { display: flex; gap: clamp(12px, 2vw, 28px); margin-top: clamp(18px, 3vh, 32px); flex-wrap: wrap; }
+  .phase {
+    flex: 1; min-width: 220px;
+    border-top: 1px solid var(--border-bright);
+    padding-top: clamp(10px, 1.6vh, 16px);
+  }
+  .phase .p { font-family: var(--font-mono); font-size: clamp(9px, 1.1vw, 12px); letter-spacing: 1.8px; text-transform: uppercase; color: var(--accent); }
+  .phase .h { font-size: clamp(18px, 2.2vw, 26px); margin: 6px 0 4px; }
+  .phase .d { font-family: var(--font-mono); font-size: clamp(10px, 1.2vw, 13px); color: var(--text-dim); line-height: 1.55; }
+
+  /* ── Nav chrome ── */
+  .deck-progress {
+    position: fixed; top: 0; left: 0; height: 3px;
+    background: var(--accent); z-index: 100;
+    transition: width .3s ease; pointer-events: none;
+  }
+  .deck-dots {
+    position: fixed; right: clamp(12px, 2vw, 24px); top: 50%;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 8px; z-index: 100;
+  }
+  .deck-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-dim); opacity: .3;
+    border: none; padding: 0; cursor: pointer;
+    transition: opacity .2s ease, transform .2s ease;
+  }
+  .deck-dot:hover { opacity: .6; }
+  .deck-dot.active { opacity: 1; transform: scale(1.5); background: var(--accent); }
+  .deck-counter {
+    position: fixed; bottom: clamp(12px, 2vh, 24px); right: clamp(12px, 2vw, 24px);
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);
+    z-index: 100; font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .deck-hints {
+    position: fixed; bottom: clamp(12px, 2vh, 24px); left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);
+    opacity: .6; z-index: 100; transition: opacity .5s ease; white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .deck-hints.faded { opacity: 0; pointer-events: none; }
+
+  /* ── Responsive ── */
+  @media (max-height: 700px) {
+    .slide { padding: clamp(24px, 4vh, 40px) clamp(32px, 6vw, 80px); }
+    .slide__display { font-size: clamp(36px, 8vw, 72px); }
+    .slide--divider .slide__number { font-size: clamp(80px, 16vw, 160px); }
+  }
+  @media (max-height: 600px) {
+    .slide__decor { display: none; }
+  }
+  @media (max-height: 500px) {
+    .slide { padding: clamp(16px, 3vh, 24px) clamp(24px, 5vw, 48px); }
+    .deck-dots { display: none; }
+    .slide__display { font-size: clamp(28px, 7vw, 48px); }
+  }
+  @media (max-width: 820px) {
+    .slide--content .slide__inner, .slide--content.right-heavy .slide__inner { grid-template-columns: 1fr; }
+    .slide--content .slide__aside { display: none; }
+    .slide--split .slide__panels { grid-template-columns: 1fr; }
+    .slide--split .slide__panel--secondary { border-left: none; border-top: 1px solid var(--border); }
+    .pipeline { flex-direction: column; }
+    .pipeline__arrow { justify-content: center; padding: 4px 0; transform: rotate(90deg); }
+    .grid-2x2 { grid-template-columns: 1fr; }
+    .formula { grid-template-columns: 1fr; gap: 6px; }
+    .formula .op { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide slide--title glow-top">
+    <svg class="slide__decor slide__decor--tr" width="180" height="180" viewBox="0 0 180 180" aria-hidden="true">
+      <line x1="180" y1="28" x2="118" y2="28" stroke="var(--accent)" stroke-width="1" opacity="0.35"/>
+      <line x1="152" y1="0" x2="152" y2="62" stroke="var(--accent)" stroke-width="1" opacity="0.35"/>
+      <rect x="140" y="16" width="24" height="24" transform="rotate(45 152 28)" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.25"/>
+    </svg>
+    <svg class="slide__decor slide__decor--bl" width="180" height="180" viewBox="0 0 180 180" aria-hidden="true">
+      <line x1="180" y1="28" x2="118" y2="28" stroke="var(--accent)" stroke-width="1" opacity="0.35"/>
+      <line x1="152" y1="0" x2="152" y2="62" stroke="var(--accent)" stroke-width="1" opacity="0.35"/>
+    </svg>
+    <div class="slide__content reveal">
+      <p class="slide__label">Field Notes · Audit Team · July 2026</p>
+      <h1 class="slide__display">The Productivity<br><em>Dashboard</em></h1>
+      <div class="title-rule"></div>
+      <p class="slide__subtitle reveal">What we're building for auditor workload, and how</p>
+    </div>
+  </section>
+
+  <!-- 2 · THE PROBLEM -->
+  <section class="slide slide--content glow-left">
+    <div class="slide__inner">
+      <div class="slide__text">
+        <p class="slide__label reveal">01 · Why</p>
+        <h2 class="slide__heading reveal">Admins can't <em>see</em> the team</h2>
+        <ul class="slide__bullets">
+          <li class="reveal">No single view ranks auditors by <strong>completed output</strong>, or translates that output into hours</li>
+          <li class="reveal">An Initial 2 review and a Monthly audit are <strong>not the same work</strong>, raw counts mislead</li>
+          <li class="reveal">Open workload is <strong>invisible until something slips</strong>, overload shows up as overdue audits, after the fact</li>
+          <li class="reveal">Rebalancing means knowing <strong>who's qualified and who has room</strong>, knowledge that lives in people's heads</li>
+          <li class="reveal">Timeframes don't flex: today for a pulse, weeks and months for trends</li>
+        </ul>
+      </div>
+      <div class="slide__aside reveal">
+        <div class="qcard-stack">
+          <div class="qcard">&ldquo;How productive is my team?&rdquo;<small>Every day</small></div>
+          <div class="qcard">&ldquo;Who is overloaded right now?&rdquo;<small>Every day</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · WHAT WE'RE BUILDING -->
+  <section class="slide slide--split">
+    <div class="slide__panels">
+      <div class="slide__panel slide__panel--primary glow-bottom">
+        <p class="slide__label reveal">02 · What</p>
+        <h2 class="slide__heading reveal">One dashboard,<br>two tabs, one drawer</h2>
+        <ul class="slide__bullets">
+          <li class="reveal"><strong>Team Productivity</strong> · completed audits per auditor, ranked, translated into productive hours</li>
+          <li class="reveal"><strong>Current Workload</strong> · what's open per auditor, projected hours of backlog</li>
+          <li class="reveal"><strong>Drill-down drawer</strong> · click any auditor, see their breakdown by audit type and client</li>
+          <li class="reveal"><strong>In-context reassignment</strong> · move open work to a qualified auditor without leaving the screen</li>
+        </ul>
+      </div>
+      <div class="slide__panel slide__panel--secondary">
+        <p class="slide__label reveal">Scoped to</p>
+        <div class="slide__body reveal" style="font-size: clamp(18px, 2.3vw, 26px); font-family: var(--font-display); color: var(--text); line-height: 1.5;">
+          Kode-side admins.<br>
+          Full auditor visibility.<br>
+          Flexible timeframes,<br>defaulting to this week.
+        </div>
+        <p class="slide__body reveal" style="margin-top: clamp(14px, 2.5vh, 24px); font-family: var(--font-mono); font-size: clamp(11px, 1.3vw, 14px);">
+          Per the brief: a lead compares people and rebalances work on one screen instead of stitching together reports.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · THE COMMON CURRENCY -->
+  <section class="slide glow-top" style="align-items: center; text-align: center;">
+    <p class="slide__label reveal">03 · The model</p>
+    <h2 class="slide__heading reveal">Everything prices work in <em>one currency</em></h2>
+    <div class="formulas">
+      <div class="formula reveal">
+        <div class="term"><b>Completed audits</b><small>per auditor, per timeframe</small></div>
+        <div class="op">&times;</div>
+        <div class="term"><b>Standard minutes</b><small>per chart kind</small></div>
+        <div class="op">=</div>
+        <div class="term result"><b>Productive Hours</b><small>what got done</small></div>
+      </div>
+      <div class="formula reveal">
+        <div class="term"><b>Open audits</b><small>per auditor, right now</small></div>
+        <div class="op">&times;</div>
+        <div class="term"><b>Standard minutes</b><small>the same values</small></div>
+        <div class="op">=</div>
+        <div class="term result"><b>Projected Time</b><small>what's coming</small></div>
+      </div>
+    </div>
+    <p class="slide__body reveal" style="margin-top: clamp(16px, 3vh, 28px); max-width: 780px;">One tunable number per chart kind powers both tabs. Output becomes comparable across people, and backlog becomes hours instead of a count.</p>
+  </section>
+
+  <!-- 5 · THE MEDIANS TABLE -->
+  <section class="slide slide--table glow-right">
+    <p class="slide__label reveal">04 · Evidence</p>
+    <h2 class="slide__heading reveal" style="margin-bottom: clamp(10px, 2vh, 20px);">The data picked the axis</h2>
+    <div class="table-wrap reveal">
+      <table class="data">
+        <thead><tr><th>Chart kind</th><th class="num">Completed evals</th><th class="num">Median minutes</th></tr></thead>
+        <tbody>
+          <tr><td>Facility Inpatient</td><td class="num">1,612</td><td class="num hot">18.1</td></tr>
+          <tr><td>Facility, Observation</td><td class="num">311</td><td class="num hot">18.1</td></tr>
+          <tr><td>Facility Behavioral Health</td><td class="num">54</td><td class="num">17.7</td></tr>
+          <tr><td>Facility Same Day Surgery</td><td class="num">539</td><td class="num">8.9</td></tr>
+          <tr><td>Rural Health Clinic &amp; FQHC</td><td class="num">328</td><td class="num">8.6</td></tr>
+          <tr><td>Professional Clinics</td><td class="num">923</td><td class="num">7.7</td></tr>
+          <tr><td>Facility Emergency Department</td><td class="num">1,059</td><td class="num">6.9</td></tr>
+          <tr><td>Ancillary</td><td class="num">513</td><td class="num hot">4.1</td></tr>
+        </tbody>
+      </table>
+      <p class="table-note">A 4.5x effort spread across chart kinds. Median wall-clock evaluation time, capped at 4h, organic-era audits only, validated in Metabase. Per-round values would flatten this, so the minutes are keyed by chart kind.</p>
+    </div>
+  </section>
+
+  <!-- 6 · SEEDED FROM REALITY -->
+  <section class="slide slide--content right-heavy glow-left">
+    <div class="slide__inner">
+      <div class="slide__aside reveal">
+        <div class="qcard" style="font-size: clamp(17px, 2.1vw, 24px);">
+          &ldquo;The real answer is that we have no idea how long these things should actually take.&rdquo;
+          <small>Product · so the values stay editable</small>
+        </div>
+      </div>
+      <div class="slide__text">
+        <p class="slide__label reveal">05 · The values</p>
+        <h2 class="slide__heading reveal">Seeded from reality,<br><em>tuned</em> by admins</h2>
+        <ul class="slide__bullets">
+          <li class="reveal">Seeds come from <strong>measured history</strong>, the capped medians on the previous slide, not guesses</li>
+          <li class="reveal">One field on the <strong>existing chart-kind admin form</strong>, adjustable any time</li>
+          <li class="reveal">The seed task re-runs safely: it <strong>fills blanks only</strong>, never overwrites a hand-set value</li>
+          <li class="reveal">New chart kinds start visibly <strong>&ldquo;not set&rdquo;</strong>, nothing ever silently prices at zero</li>
+          <li class="reveal">Hours recalculate against current values, frozen history is a <strong>parked follow-up</strong> if product wants it</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · DATA HONESTY -->
+  <section class="slide slide--split">
+    <div class="slide__panels">
+      <div class="slide__panel slide__panel--primary glow-top">
+        <p class="slide__label reveal">06 · Honesty</p>
+        <h2 class="slide__heading reveal">How far back<br>the numbers go</h2>
+        <p class="slide__body reveal" style="margin-top: clamp(12px, 2vh, 20px);">
+          Production history arrived through two go-live imports plus the live pipeline, and each is distinguishable in SQL. The dashboard states its boundaries instead of blurring them.
+        </p>
+      </div>
+      <div class="slide__panel slide__panel--secondary">
+        <table class="data reveal" style="background: var(--bg); border-color: var(--border-bright); box-shadow: 0 18px 44px -30px rgba(0,0,0,0.5);">
+          <thead><tr><th>Number</th><th>Trustworthy range</th></tr></thead>
+          <tbody>
+            <tr><td>Completed counts</td><td>Aug 2025 forward</td></tr>
+            <tr><td>Auditor attribution</td><td>Clean from Nov 2025, small caveat before</td></tr>
+            <tr><td>Duration math</td><td>Organic era, ~Apr 2026 forward</td></tr>
+            <tr><td>Per-chart precision</td><td>~Apr 2026 forward, imports have no charts</td></tr>
+          </tbody>
+        </table>
+        <p class="table-note reveal">Counts reach further back than reliable hours. The tabs carry a data-quality note where it matters.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · DIVIDER -->
+  <section class="slide slide--divider glow-bottom">
+    <span class="slide__number">02</span>
+    <div class="slide__content">
+      <p class="slide__label reveal">Implementation</p>
+      <h2 class="slide__heading reveal" style="font-size: clamp(40px, 6.5vw, 76px);">The <em>build</em></h2>
+      <p class="slide__subtitle reveal" style="margin-top: 14px;">Twelve cards, sequenced and parallelizable, nothing over three points</p>
+    </div>
+  </section>
+
+  <!-- 9 · BUILD ORDER PIPELINE -->
+  <section class="slide glow-top">
+    <p class="slide__label reveal">07 · Sequence</p>
+    <h2 class="slide__heading reveal">Shell first, data next, pixels last</h2>
+    <div class="pipeline reveal">
+      <div class="pipeline__step">
+        <div class="pipeline__num">01</div>
+        <div class="pipeline__name">Shell</div>
+        <div class="pipeline__desc">Route, admin policy, timeframe control, tab scaffold. Zero data dependencies, clickable early.</div>
+        <div class="pipeline__file">AUD-870</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step">
+        <div class="pipeline__num">02</div>
+        <div class="pipeline__name">Minutes</div>
+        <div class="pipeline__desc">Column on chart kinds, seed task, admin form field. Runs parallel with the shell.</div>
+        <div class="pipeline__file">AUD-871</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step">
+        <div class="pipeline__num">03</div>
+        <div class="pipeline__name">Queries</div>
+        <div class="pipeline__desc">Workload and productivity query objects, one shared minutes seam. Parallel pair.</div>
+        <div class="pipeline__file">AUD-872 · 873</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step">
+        <div class="pipeline__num">04</div>
+        <div class="pipeline__name">Tabs</div>
+        <div class="pipeline__desc">Team Productivity and Current Workload, KPI cards plus tables. Parallel pair.</div>
+        <div class="pipeline__file">AUD-874 · 875</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step">
+        <div class="pipeline__num">05</div>
+        <div class="pipeline__name">Drawers</div>
+        <div class="pipeline__desc">Both drill-down variants, then the reassign action with its end-to-end spec.</div>
+        <div class="pipeline__file">AUD-876 · 877</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step">
+        <div class="pipeline__num">06</div>
+        <div class="pipeline__name">Nav</div>
+        <div class="pipeline__desc">The go-live moment. Until this ships the page is URL-only, invisible in production.</div>
+        <div class="pipeline__file">AUD-878</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 · ISSUE MAP -->
+  <section class="slide slide--table glow-left">
+    <p class="slide__label reveal">08 · The cards</p>
+    <h2 class="slide__heading reveal" style="margin-bottom: clamp(10px, 2vh, 20px);">MVP issue map</h2>
+    <div class="table-wrap reveal">
+      <table class="data">
+        <thead><tr><th>Issue</th><th>What it delivers</th><th class="num">Points</th></tr></thead>
+        <tbody>
+          <tr><td>AUD-870</td><td>Dashboard shell, policy, timeframe control</td><td class="num">3</td></tr>
+          <tr><td>AUD-871</td><td>Minutes on chart kinds, seeded, admin field</td><td class="num">3</td></tr>
+          <tr><td>AUD-872</td><td>Workload query object</td><td class="num">3</td></tr>
+          <tr><td>AUD-873</td><td>Productivity query object</td><td class="num">3</td></tr>
+          <tr><td>AUD-874 · 875</td><td>The two tabs, KPI cards and ranked tables</td><td class="num">3 + 3</td></tr>
+          <tr><td>AUD-876</td><td>Drill-down drawers, both variants</td><td class="num">3</td></tr>
+          <tr><td>AUD-877</td><td>Reassignment, plus the end-to-end system spec</td><td class="num">3</td></tr>
+          <tr><td>AUD-878</td><td>Admin nav entry, deliberately last</td><td class="num">1</td></tr>
+        </tbody>
+      </table>
+      <p class="table-note">25 points across 9 cards. Every card is a single PR, specs ride inside the card that introduces the code.</p>
+    </div>
+  </section>
+
+  <!-- 11 · DECISIONS -->
+  <section class="slide glow-right">
+    <p class="slide__label reveal">09 · Judgment calls</p>
+    <h2 class="slide__heading reveal">Four decisions, and why</h2>
+    <div class="grid-2x2">
+      <div class="dcard reveal">
+        <h3>Minutes live <span>on chart kinds</span></h3>
+        <p>One integer on the record that already exists, editable on the chart-kind admin form. The Platform sync only ever writes display_name, so a hand-set value can't be clobbered.</p>
+      </div>
+      <div class="dcard reveal">
+        <h3>Live recalc, <span>snapshot parked</span></h3>
+        <p>Hours compute against current values. Freezing history at completion time is purely additive later, so it waits for a real product answer instead of shipping speculatively.</p>
+      </div>
+      <div class="dcard reveal">
+        <h3>Capacity <span>cut</span></h3>
+        <p>Product dropped slot gating. Reassignment shows qualified candidates with their current load and trusts the lead's judgment, no capacity model to invent.</p>
+      </div>
+      <div class="dcard reveal">
+        <h3>One <span>minutes seam</span></h3>
+        <p>Both query objects resolve expected minutes through a single shared helper. The precision upgrade later swaps that seam's interior and deletes nothing.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 · REASSIGNMENT -->
+  <section class="slide slide--split">
+    <div class="slide__panels">
+      <div class="slide__panel slide__panel--primary glow-bottom">
+        <p class="slide__label reveal">10 · The payoff</p>
+        <h2 class="slide__heading reveal">Reassignment,<br><em>in context</em></h2>
+        <p class="slide__body reveal" style="margin-top: clamp(12px, 2vh, 20px);">
+          The drawer's reassign flow is assembled entirely from primitives that already exist and already power auto-assignment. Nothing novel to invent, just a new surface on trusted machinery.
+        </p>
+      </div>
+      <div class="slide__panel slide__panel--secondary">
+        <div class="vsteps">
+          <div class="vstep reveal"><span class="n">1</span><span class="t">Expand <strong>Reassign</strong> on any line in an auditor's workload drawer</span></div>
+          <div class="vstep reveal"><span class="n">2</span><span class="t"><code>AuditAccess.eligible_assignees_for</code> lists only qualified candidates</span></div>
+          <div class="vstep reveal"><span class="n">3</span><span class="t">Each candidate shows their <strong>current load</strong>, the lead judges capacity by eye</span></div>
+          <div class="vstep reveal"><span class="n">4</span><span class="t"><code>Audits::ManualAssigner</code> executes, drawer and table refresh in place</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 · POST GO-LIVE -->
+  <section class="slide glow-top">
+    <p class="slide__label reveal">11 · Then</p>
+    <h2 class="slide__heading reveal">Measured, <em>not modeled</em></h2>
+    <p class="slide__body reveal" style="max-width: 900px; margin-top: clamp(8px, 1.5vh, 14px);">Platform already times every coding session, pickup to submit. After go-live, each audit's expected minutes come from what its actual chart took to code, times the accepted 1.5x rule, with the standard values as permanent fallback.</p>
+    <div class="pipeline reveal" style="max-width: 1100px;">
+      <div class="pipeline__step">
+        <div class="pipeline__num">PLATFORM</div>
+        <div class="pipeline__name">Ship the duration</div>
+        <div class="pipeline__desc">One line: add duration_seconds to the chart payload Platform already sends us.</div>
+        <div class="pipeline__file">PLA-2920 · 1 pt</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step">
+        <div class="pipeline__num">AUDIT</div>
+        <div class="pipeline__name">Ingest + backfill</div>
+        <div class="pipeline__desc">Store it on ingestion, backfill the organic era. Imports have no charts, standard values cover them forever.</div>
+        <div class="pipeline__file">AUD-879 · 3 pts</div>
+      </div>
+      <div class="pipeline__arrow"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 12h14m-4-4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pipeline__step">
+        <div class="pipeline__num">AUDIT</div>
+        <div class="pipeline__name">Coding time × 1.5</div>
+        <div class="pipeline__desc">The shared seam swaps its interior. Both tabs, drawers, and KPIs pick it up automatically.</div>
+        <div class="pipeline__file">AUD-880 · 2 pts</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 · SCOPE DISCIPLINE -->
+  <section class="slide slide--content glow-left">
+    <div class="slide__inner">
+      <div class="slide__text">
+        <p class="slide__label reveal">12 · Scope</p>
+        <h2 class="slide__heading reveal">Cut, parked,<br>or <em>post-MVP</em></h2>
+        <ul class="slide__bullets">
+          <li class="reveal"><strong>Capacity model and slot gating</strong> · cut by product, candidates show their current load instead</li>
+          <li class="reveal"><strong>Frozen history for productive hours</strong> · parked on an open product question, hours recalculate live for now</li>
+          <li class="reveal"><strong>Overdue indicators</strong> · shown in the mock, but no due-date data exists yet to power them</li>
+          <li class="reveal"><strong>Measured per-audit times</strong> · not cut, sequenced: the Post Go-Live milestone on the previous slide</li>
+        </ul>
+      </div>
+      <div class="slide__aside reveal">
+        <div class="qcard" style="font-size: clamp(17px, 2.1vw, 24px);">
+          Everything cut or parked is additive later. Nothing here blocks go-live.
+          <small>Scope rule</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 · ROLLOUT -->
+  <section class="slide glow-bottom" style="justify-content: center;">
+    <p class="slide__label reveal">13 · Rollout</p>
+    <h2 class="slide__heading reveal">Deployed dark, revealed once</h2>
+    <div class="stat-band reveal">
+      <div class="stat"><div class="v">9</div><div class="k">MVP cards</div></div>
+      <div class="stat"><div class="v">25</div><div class="k">MVP points</div></div>
+      <div class="stat"><div class="v">3</div><div class="k">Post go-live cards</div></div>
+      <div class="stat"><div class="v">&le;3</div><div class="k">Points per card, one PR each</div></div>
+    </div>
+    <ul class="slide__bullets" style="max-width: 900px;">
+      <li class="reveal">Every merge deploys to production, the page stays <strong>reachable only by URL</strong> for demos and feedback</li>
+      <li class="reveal">The <strong>Pundit policy</strong> is the real access gate from day one, not the nav's absence</li>
+      <li class="reveal">Merging the nav card is the <strong>go-live moment</strong>, one small PR flips visibility</li>
+    </ul>
+  </section>
+
+  <!-- 16 · CLOSING -->
+  <section class="slide slide--bleed">
+    <div class="slide__bg"></div>
+    <div class="slide__content">
+      <p class="slide__label reveal">The bigger picture</p>
+      <h2 class="slide__display reveal" style="font-size: clamp(40px, 7vw, 92px);">Phase one <em>of three</em></h2>
+      <div class="phases reveal">
+        <div class="phase">
+          <div class="p">Phase 1 · This project</div>
+          <div class="h">The dashboard</div>
+          <div class="d">No AI. The data modeling and query objects are the durable asset.</div>
+        </div>
+        <div class="phase">
+          <div class="p">Phase 2 · Next</div>
+          <div class="h">The chatbot</div>
+          <div class="d">The same query objects become read-only tools an in-app assistant calls, via Bedrock.</div>
+        </div>
+        <div class="phase">
+          <div class="p">Phase 3 · Earned</div>
+          <div class="h">The agent</div>
+          <div class="d">Write tools for reassignment behind a human confirm, once the read-only version earns trust.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+function autoFit() {
+  document.querySelectorAll('.slide__kpi-val, .stat .v').forEach(function(el) {
+    if (el.scrollWidth > el.clientWidth) {
+      var s = el.clientWidth / el.scrollWidth;
+      el.style.transform = 'scale(' + s + ')';
+      el.style.transformOrigin = 'left top';
+    }
+  });
+}
+
+class SlideEngine {
+  constructor() {
+    this.deck = document.querySelector('.deck');
+    this.slides = [...document.querySelectorAll('.slide')];
+    this.current = 0;
+    this.total = this.slides.length;
+    this.buildChrome();
+    this.bindEvents();
+    this.observe();
+    this.update();
+  }
+  buildChrome() {
+    var bar = document.createElement('div');
+    bar.className = 'deck-progress';
+    document.body.appendChild(bar);
+    this.bar = bar;
+    var dots = document.createElement('div');
+    dots.className = 'deck-dots';
+    var self = this;
+    this.slides.forEach(function(_, i) {
+      var d = document.createElement('button');
+      d.className = 'deck-dot';
+      d.title = 'Slide ' + (i + 1);
+      d.onclick = function() { self.goTo(i); };
+      dots.appendChild(d);
+    });
+    document.body.appendChild(dots);
+    this.dots = [].slice.call(dots.children);
+    var ctr = document.createElement('div');
+    ctr.className = 'deck-counter';
+    document.body.appendChild(ctr);
+    this.counter = ctr;
+    var hints = document.createElement('div');
+    hints.className = 'deck-hints';
+    hints.textContent = '← → or scroll to navigate';
+    document.body.appendChild(hints);
+    this.hints = hints;
+    this.hintTimer = setTimeout(function() { hints.classList.add('faded'); }, 4000);
+  }
+  bindEvents() {
+    var self = this;
+    document.addEventListener('keydown', function(e) {
+      if (e.target.closest('input, textarea, [contenteditable]')) return;
+      if (['ArrowDown', 'ArrowRight', ' ', 'PageDown'].includes(e.key)) { e.preventDefault(); self.next(); }
+      else if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); self.prev(); }
+      else if (e.key === 'Home') { e.preventDefault(); self.goTo(0); }
+      else if (e.key === 'End') { e.preventDefault(); self.goTo(self.total - 1); }
+      self.fadeHints();
+    });
+    var touchY;
+    this.deck.addEventListener('touchstart', function(e) { touchY = e.touches[0].clientY; }, { passive: true });
+    this.deck.addEventListener('touchend', function(e) {
+      var dy = touchY - e.changedTouches[0].clientY;
+      if (Math.abs(dy) > 50) { dy > 0 ? self.next() : self.prev(); }
+    });
+  }
+  observe() {
+    var self = this;
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          self.current = self.slides.indexOf(entry.target);
+          self.update();
+        }
+      });
+    }, { threshold: 0.5 });
+    this.slides.forEach(function(s) { obs.observe(s); });
+  }
+  goTo(i) {
+    this.slides[Math.max(0, Math.min(i, this.total - 1))].scrollIntoView({ behavior: 'smooth' });
+  }
+  next() { if (this.current < this.total - 1) this.goTo(this.current + 1); }
+  prev() { if (this.current > 0) this.goTo(this.current - 1); }
+  update() {
+    this.bar.style.width = ((this.current + 1) / this.total * 100) + '%';
+    var self = this;
+    this.dots.forEach(function(d, i) { d.classList.toggle('active', i === self.current); });
+    this.counter.textContent = (this.current + 1) + ' / ' + this.total;
+  }
+  fadeHints() {
+    clearTimeout(this.hintTimer);
+    this.hints.classList.add('faded');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  autoFit();
+  new SlideEngine();
+});
+</script>
+</body>
+</html>
