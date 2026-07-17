@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audit Analytics Assistant · Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Blueprint / technical: deep slate, teal + blue, monospace labels, faint grid. */
+  :root {
+    --bg: #0d1521;
+    --grid: rgba(120, 170, 200, 0.05);
+    --surface: #131e2e;
+    --surface2: #17253a;
+    --surface3: #1d2f48;
+    --line: rgba(140, 190, 220, 0.14);
+    --line-bright: rgba(140, 190, 220, 0.28);
+    --text: #dfe9f2;
+    --text-dim: #8ea6bd;
+    --teal: #22b8cf;
+    --teal-dim: rgba(34, 184, 207, 0.12);
+    --blue: #3b8fd4;
+    --blue-dim: rgba(59, 143, 212, 0.12);
+    --amber: #d99a3a;
+    --amber-dim: rgba(217, 154, 58, 0.13);
+    --font: 'DM Sans', system-ui, sans-serif;
+    --mono: 'Fira Code', 'SF Mono', monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f3f6fa;
+      --grid: rgba(30, 70, 110, 0.05);
+      --surface: #ffffff;
+      --surface2: #eef3f9;
+      --surface3: #e4ecf5;
+      --line: rgba(30, 70, 110, 0.14);
+      --line-bright: rgba(30, 70, 110, 0.26);
+      --text: #14212f;
+      --text-dim: #55708a;
+      --teal: #0e7c90;
+      --teal-dim: rgba(14, 124, 144, 0.10);
+      --blue: #1f6fb2;
+      --blue-dim: rgba(31, 111, 178, 0.10);
+      --amber: #a86f14;
+      --amber-dim: rgba(168, 111, 20, 0.12);
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+    color: var(--text);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: clamp(24px, 5vw, 72px) clamp(16px, 4vw, 56px);
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 2.5px; text-transform: uppercase;
+    color: var(--teal);
+  }
+  h1 {
+    font-size: clamp(30px, 5vw, 52px);
+    font-weight: 700; letter-spacing: -1px; line-height: 1.05;
+    margin: 12px 0 14px;
+  }
+  .lede {
+    font-size: clamp(15px, 1.8vw, 19px);
+    color: var(--text-dim);
+    max-width: 76ch;
+  }
+  .lede b { color: var(--text); font-weight: 600; }
+
+  h2 {
+    font-size: clamp(19px, 2.4vw, 26px);
+    font-weight: 700; letter-spacing: -0.3px;
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  h2 .n {
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    color: var(--teal);
+    border: 1px solid var(--line-bright);
+    border-radius: 6px;
+    padding: 2px 8px;
+  }
+  section { margin-top: clamp(40px, 6vw, 72px); }
+  .sub { color: var(--text-dim); font-size: 15px; margin-top: 8px; max-width: 74ch; }
+
+  /* Loop flow */
+  .loop { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 24px; }
+  .loop > * { min-width: 0; }
+  .step {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 18px 20px;
+  }
+  .step .num {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    color: var(--blue);
+  }
+  .step h3 { font-size: 16px; font-weight: 600; margin: 6px 0 6px; }
+  .step p { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+  .step.cycle { border-color: var(--teal); background: var(--teal-dim); }
+  .step.cycle .num { color: var(--teal); }
+  .loopback {
+    margin-top: 16px;
+    font-family: var(--mono); font-size: 12.5px;
+    color: var(--teal);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .loopback svg { flex: none; }
+
+  .callouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 22px; }
+  .callouts > * { min-width: 0; }
+  .callout {
+    background: var(--surface2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .callout .tag {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--amber);
+  }
+  .callout p { font-size: 14px; color: var(--text-dim); margin-top: 7px; line-height: 1.55; }
+  .callout p b { color: var(--text); font-weight: 600; }
+
+  /* Stack */
+  .boundary {
+    margin-top: 24px;
+    border: 1.5px dashed var(--line-bright);
+    border-radius: 16px;
+    padding: 14px;
+    position: relative;
+  }
+  .boundary__label {
+    position: absolute; top: -11px; left: 20px;
+    background: var(--bg);
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase;
+    color: var(--amber);
+    padding: 0 10px;
+  }
+  .layer {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 16px; align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 15px 18px;
+  }
+  .layer + .layer { margin-top: 8px; }
+  .layer__k {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    letter-spacing: 0.8px; text-transform: uppercase;
+    color: var(--teal);
+  }
+  .layer__v { font-size: 14.5px; color: var(--text-dim); }
+  .layer__v b { color: var(--text); font-weight: 600; }
+  .layer__v code, .step p code, .callout p code, .layer__v .chip {
+    font-family: var(--mono); font-size: 0.85em;
+    background: var(--blue-dim); color: var(--text);
+    border: 1px solid var(--line);
+    padding: 1px 6px; border-radius: 5px; white-space: nowrap;
+  }
+  .layer--model { background: var(--surface3); }
+  .layer--model .layer__k { color: var(--blue); }
+
+  .gems { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .gem {
+    font-family: var(--mono); font-size: 12.5px;
+    background: var(--surface2); border: 1px solid var(--line-bright);
+    border-radius: 20px; padding: 6px 13px;
+    color: var(--text);
+  }
+  .gem span { color: var(--text-dim); }
+  .gem.alt { border-style: dashed; color: var(--text-dim); }
+
+  /* Tools */
+  .toolgroups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 22px; }
+  .toolgroups > * { min-width: 0; }
+  .tgroup {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 18px 8px;
+  }
+  .tgroup > h3 {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--teal);
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .tgroup > h3 .mode {
+    font-size: 10px; letter-spacing: 1px;
+    color: var(--text-dim);
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px;
+  }
+  .tgroup > h3 .mode.write { color: var(--amber); border-color: var(--amber); }
+  .tool { padding: 9px 0; border-top: 1px solid var(--line); }
+  .tool:first-of-type { border-top: none; }
+  .tool code {
+    font-family: var(--mono); font-size: 12.5px; color: var(--text);
+    display: block; word-break: break-word;
+  }
+  .tool code b { color: var(--teal); font-weight: 600; }
+  .tgroup.write .tool code b { color: var(--amber); }
+  .tool small { display: block; font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+
+  .foot { margin-top: clamp(40px, 6vw, 64px); padding-top: 24px; border-top: 1px solid var(--line); }
+  .foot .eyebrow { color: var(--text-dim); }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 12px; }
+  .links a { font-family: var(--mono); font-size: 12.5px; color: var(--blue); text-decoration: none; }
+  .links a:hover { color: var(--teal); text-decoration: underline; }
+
+  @media (max-width: 560px) {
+    .layer { grid-template-columns: 1fr; gap: 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Audit App · Phase 2 Sketch · Kody v2</p>
+    <h1>Audit Analytics Assistant</h1>
+    <p class="lede">A read-first chat agent, hosted on <b>Amazon Bedrock</b> for HIPAA, that answers workload and productivity questions by calling <b>curated Rails tools</b>, reasoning over what they return, and eventually drafting reassignments behind a human confirm. It reuses the productivity dashboard's query objects as its tools. The model drives the loop: it decides which tools to call, does its own math on the numbers, and picks the next step.</p>
+  </header>
+
+  <section>
+    <h2><span class="n">01</span> The loop</h2>
+    <p class="sub">A hand rolled agentic loop inside the Rails monolith, the Shopify Sidekick shape. No orchestration framework. The model calls tools, reads results, reasons, and calls again until it can answer.</p>
+
+    <div class="loop">
+      <div class="step">
+        <div class="num">01</div>
+        <h3>User asks</h3>
+        <p>An admin types a question in the chat panel. The turn is persisted and a background job picks it up.</p>
+      </div>
+      <div class="step">
+        <div class="num">02</div>
+        <h3>Job runs the loop</h3>
+        <p>A Sidekiq job runs the agent off the web thread so long multi call turns never block a request.</p>
+      </div>
+      <div class="step cycle">
+        <div class="num">03</div>
+        <h3>Model decides</h3>
+        <p>Claude on Bedrock either answers directly or emits one or more tool calls for the facts it needs.</p>
+      </div>
+      <div class="step cycle">
+        <div class="num">04</div>
+        <h3>Tools run Rails side</h3>
+        <p>Each tool runs a Pundit scoped, read only query and returns named metrics, not prose, not raw rows.</p>
+      </div>
+      <div class="step cycle">
+        <div class="num">05</div>
+        <h3>Model reasons</h3>
+        <p>It does the arithmetic, ranks, compares periods, and decides whether it needs another call or is done.</p>
+      </div>
+      <div class="step">
+        <div class="num">06</div>
+        <h3>Answer streams back</h3>
+        <p>The composed answer streams token by token into the chat via Turbo Streams.</p>
+      </div>
+    </div>
+
+    <div class="loopback">
+      <svg width="34" height="16" viewBox="0 0 34 16" fill="none"><path d="M2 8h26m-6-5l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Steps 03 to 05 cycle until the model has enough to answer, capped by a max iteration limit.
+    </div>
+
+    <div class="callouts">
+      <div class="callout">
+        <div class="tag">Shopify trick · JIT instructions</div>
+        <p>Each tool's usage rules ride back <b>attached to that tool's result</b>, only when the tool is called, instead of bloating the system prompt. Keeps the prompt lean and cache friendly as the tool set grows.</p>
+      </div>
+      <div class="callout">
+        <div class="tag">The model owns reasoning</div>
+        <p>Tools return facts. The model decides <b>which tools, in what order</b>, does the math on the returned numbers, and composes the reply. No business logic is hidden in prompt strings.</p>
+      </div>
+      <div class="callout">
+        <div class="tag">Timing</div>
+        <p>The system prompt injects <b>today's date in Eastern and the active business week</b>. The model resolves relative phrases like "this week" or "last month" itself, and tools take explicit <code>period</code> ranges.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span> The stack</h2>
+    <p class="sub">Everything runs inside the AWS boundary. Claude is reached through Bedrock, so prompts and tool results never leave the customer account.</p>
+
+    <div class="boundary">
+      <span class="boundary__label">AWS · Bedrock boundary · HIPAA eligible · AWS is sole data processor</span>
+
+      <div class="layer">
+        <div class="layer__k">Presentation</div>
+        <div class="layer__v"><b>Hotwire</b>, Turbo Streams for token streaming, Stimulus for the chat panel. No custom websocket code.</div>
+      </div>
+      <div class="layer">
+        <div class="layer__k">Orchestration</div>
+        <div class="layer__v"><b>RubyLLM</b> owns the loop, tool dispatch, and streaming. <b>Sidekiq</b> runs it off the web thread.</div>
+      </div>
+      <div class="layer layer--model">
+        <div class="layer__k">Model access</div>
+        <div class="layer__v"><b>Amazon Bedrock</b> via <span class="chip">BedrockMantleClient</span>. <b>Claude Opus 4.8</b> as the agent, <b>Claude Haiku 4.5</b> for cheap routing or classification if needed.</div>
+      </div>
+      <div class="layer">
+        <div class="layer__k">Persistence</div>
+        <div class="layer__v"><b>Postgres</b> through RubyLLM's <span class="chip">acts_as_chat</span> <span class="chip">acts_as_message</span> <span class="chip">acts_as_tool_call</span>. Full transcripts, replayable.</div>
+      </div>
+      <div class="layer">
+        <div class="layer__k">Data access</div>
+        <div class="layer__v"><b>Curated tools</b> over a read only connection, each reusing <b>Pundit</b> <span class="chip">policy_scope</span>. The same query objects the productivity dashboard uses.</div>
+      </div>
+    </div>
+
+    <div class="gems">
+      <div class="gem">rubyllm <span>· loop, tools, streaming, bedrock provider</span></div>
+      <div class="gem">aws-sdk-core <span>· Bedrock credentials</span></div>
+      <div class="gem">pundit <span>· reused, per tool scoping</span></div>
+      <div class="gem">sidekiq <span>· existing</span></div>
+      <div class="gem">turbo-rails <span>· existing</span></div>
+      <div class="gem alt">alt: anthropic gem + tool_runner <span>· first party option</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">03</span> Tool catalog</h2>
+    <p class="sub">Curated, named metric tools, not raw SQL. Nineteen to start, grouped by intent. Read tools are safe to call freely. Write tools are gated behind a human confirm and ship in phase three.</p>
+
+    <div class="toolgroups">
+      <div class="tgroup">
+        <h3>Workload <span class="mode">read</span></h3>
+        <div class="tool"><code><b>team_workload_summary</b>(period)</code><small>Open counts and projected hours for every auditor.</small></div>
+        <div class="tool"><code><b>auditor_workload</b>(auditor, period)</code><small>One auditor's open audits and projected hours.</small></div>
+        <div class="tool"><code><b>open_audits_by_type</b>(auditor)</code><small>Open counts split by round, Initial 1, Initial 2, Monthly.</small></div>
+        <div class="tool"><code><b>audits_awaiting_assignment</b>()</code><small>The unassigned queue, by chart kind and client.</small></div>
+        <div class="tool"><code><b>aging_open_audits</b>(auditor)</code><small>Open audits ranked by how long they have sat.</small></div>
+      </div>
+
+      <div class="tgroup">
+        <h3>Productivity <span class="mode">read</span></h3>
+        <div class="tool"><code><b>team_productivity_ranking</b>(period)</code><small>Auditors ranked by completed output and productive hours.</small></div>
+        <div class="tool"><code><b>auditor_productivity</b>(auditor, period)</code><small>Completed audits and productive hours for one auditor.</small></div>
+        <div class="tool"><code><b>completed_audits_by_type</b>(auditor, period)</code><small>Completed counts split by round and month.</small></div>
+        <div class="tool"><code><b>period_comparison</b>(auditor, period_a, period_b)</code><small>Trend between two windows for one auditor.</small></div>
+        <div class="tool"><code><b>chart_kind_volume</b>(period)</code><small>Audit volume by chart kind over a window.</small></div>
+      </div>
+
+      <div class="tgroup">
+        <h3>Qualification &amp; roster <span class="mode">read</span></h3>
+        <div class="tool"><code><b>eligible_auditors</b>(chart_kind, client)</code><small>Who is qualified, via AuditAccess. Powers reassignment.</small></div>
+        <div class="tool"><code><b>auditor_specialties</b>(auditor)</code><small>The chart kinds an auditor is qualified for.</small></div>
+        <div class="tool"><code><b>auditor_roster</b>(client)</code><small>The auditors working a given client.</small></div>
+      </div>
+
+      <div class="tgroup">
+        <h3>Reference <span class="mode">read</span></h3>
+        <div class="tool"><code><b>chart_kind_effort_minutes</b>(chart_kind)</code><small>The tunable minutes per audit that drive the hours math.</small></div>
+        <div class="tool"><code><b>audit_detail</b>(encounter_or_id)</code><small>A single audit's status, coder, chart kind, dates.</small></div>
+        <div class="tool"><code><b>coder_audit_history</b>(coder)</code><small>Recent audit activity for one coder.</small></div>
+      </div>
+
+      <div class="tgroup write">
+        <h3>Reassignment <span class="mode write">write · confirm</span></h3>
+        <div class="tool"><code><b>draft_reassignment</b>(audit, to_auditor)</code><small>Stages a move. Nothing changes yet.</small></div>
+        <div class="tool"><code><b>confirm_reassignment</b>(draft_id)</code><small>Promotes the draft after a human clicks confirm.</small></div>
+        <div class="tool"><code><b>cancel_reassignment</b>(draft_id)</code><small>Discards a staged move.</small></div>
+      </div>
+    </div>
+
+    <div class="callouts">
+      <div class="callout">
+        <div class="tag">Guardrails</div>
+        <p><b>Pundit</b> scoping inside every tool, a <b>read only</b> connection for reads, all tool output treated as <b>untrusted</b> so no raw PHI rows are returned, and a <b>human confirm</b> before any write. A max iteration cap bounds the loop.</p>
+      </div>
+      <div class="callout">
+        <div class="tag">Why curated, not text to SQL</div>
+        <p>Text to SQL falls off a cliff on real schemas and database over MCP against production is unsafe. Curated tools returning <b>named metrics</b> keep authorization deterministic and outputs correct.</p>
+      </div>
+      <div class="callout">
+        <div class="tag">From Kody v1</div>
+        <p>Keep the <b>registry and per tool auth</b> split and the <b>draft then confirm</b> handshake. Fix the two flaws, one tool call per turn and the mangled multi turn tool history, by using RubyLLM's real loop and Postgres transcripts.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p class="eyebrow">Sources</p>
+    <div class="links">
+      <a href="https://shopify.engineering/building-production-ready-agentic-systems" target="_blank" rel="noopener">Shopify · production agents</a>
+      <a href="https://www.anthropic.com/engineering/writing-tools-for-agents" target="_blank" rel="noopener">Anthropic · writing tools</a>
+      <a href="https://platform.claude.com/docs/en/build-with-claude/claude-in-amazon-bedrock" target="_blank" rel="noopener">Claude in Bedrock</a>
+      <a href="https://rubyllm.com/" target="_blank" rel="noopener">RubyLLM</a>
+      <a href="https://simonwillison.net/2025/Jul/6/supabase-mcp-lethal-trifecta/" target="_blank" rel="noopener">Supabase MCP · lethal trifecta</a>
+      <a href="https://github.com/kodehealth/management/pull/411" target="_blank" rel="noopener">Kody v1 · PR #411</a>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
