@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Productivity Assistant: Research, Architecture, and Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+  --bg: #0f1729;
+  --surface: #162040;
+  --surface2: #1d2b52;
+  --border: rgba(200, 180, 140, 0.10);
+  --border-bright: rgba(200, 180, 140, 0.2);
+  --text: #e8e4d8;
+  --text-dim: #a49e8e;
+  --accent: #d4a73a;
+  --accent-dim: rgba(212, 167, 58, 0.1);
+  --green: #6fcf97;
+  --code-bg: #0a0f1e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); }
+
+.deck { height: 100dvh; overflow-y: auto; scroll-snap-type: y mandatory; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+.slide { height: 100dvh; scroll-snap-align: start; overflow: hidden; position: relative; display: flex; flex-direction: column; justify-content: center; padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px); isolation: isolate; }
+
+/* Opacity-only reveals (no translate or scale entrances) */
+.slide { opacity: 0; transition: opacity 0.6s ease; }
+.slide.visible { opacity: 1; }
+.slide .reveal { opacity: 0; transition: opacity 0.5s ease; }
+.slide.visible .reveal { opacity: 1; }
+.slide.visible .reveal:nth-child(1) { transition-delay: 0.08s; }
+.slide.visible .reveal:nth-child(2) { transition-delay: 0.16s; }
+.slide.visible .reveal:nth-child(3) { transition-delay: 0.24s; }
+.slide.visible .reveal:nth-child(4) { transition-delay: 0.32s; }
+.slide.visible .reveal:nth-child(5) { transition-delay: 0.4s; }
+.slide.visible .reveal:nth-child(6) { transition-delay: 0.48s; }
+@media (prefers-reduced-motion: reduce) { .slide, .slide .reveal { opacity: 1 !important; transition: none !important; } }
+
+.slide__display { font-family: var(--font-display); font-size: clamp(52px, 9vw, 116px); font-weight: 400; letter-spacing: -1px; line-height: 1.0; text-wrap: balance; }
+.slide__heading { font-family: var(--font-display); font-size: clamp(30px, 5vw, 52px); font-weight: 400; letter-spacing: -0.5px; line-height: 1.1; text-wrap: balance; }
+.slide__body { font-size: clamp(16px, 2.2vw, 22px); line-height: 1.6; color: var(--text-dim); text-wrap: pretty; }
+.slide__label { font-family: var(--font-mono); font-size: clamp(10px, 1.2vw, 14px); font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--accent); margin-bottom: clamp(10px, 2vh, 20px); }
+.slide__subtitle { font-family: var(--font-mono); font-size: clamp(13px, 1.6vw, 18px); color: var(--text-dim); letter-spacing: 0.5px; }
+
+/* backgrounds vary per slide */
+.slide--glow-tr { background-image: radial-gradient(ellipse at 80% 10%, var(--accent-dim) 0%, transparent 55%); }
+.slide--glow-bl { background-image: radial-gradient(ellipse at 15% 90%, var(--accent-dim) 0%, transparent 55%); }
+
+/* title */
+.slide--title { justify-content: center; align-items: center; text-align: center; padding: 0; }
+.slide--title .slide__bg, .slide--bleed .slide__bg { position: absolute; inset: 0; background-size: cover; background-position: center; z-index: 0; }
+.slide--title .slide__bg--gradient { background: radial-gradient(ellipse at 70% 20%, rgba(212,167,58,0.22) 0%, transparent 50%), linear-gradient(160deg, #16224a 0%, #0f1729 60%, #0a0f1e 100%); }
+.slide--title .slide__scrim { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(15,23,41,0.25) 0%, rgba(15,23,41,0.72) 100%); z-index: 1; }
+.slide--title .slide__content { position: relative; z-index: 2; padding: 40px; }
+.kicker-rule { width: 64px; height: 1px; background: var(--accent); opacity: 0.7; margin: clamp(16px, 3vh, 28px) auto; }
+
+/* divider */
+.slide--divider { justify-content: center; }
+.slide--divider .slide__number { font-family: var(--font-display); font-size: clamp(110px, 24vw, 280px); font-weight: 400; line-height: 0.85; opacity: 0.07; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -55%); pointer-events: none; }
+
+/* content */
+.slide--content .slide__inner { display: grid; grid-template-columns: 3fr 2fr; gap: clamp(24px, 4vw, 60px); align-items: center; width: 100%; }
+.slide--content.slide--right .slide__inner { grid-template-columns: 2fr 3fr; }
+.slide__bullets { list-style: none; padding: 0; margin-top: clamp(14px, 2.5vh, 26px); }
+.slide__bullets li { padding: clamp(6px, 1.2vh, 11px) 0 clamp(6px, 1.2vh, 11px) 24px; position: relative; font-size: clamp(15px, 1.9vw, 21px); line-height: 1.55; color: var(--text-dim); }
+.slide__bullets li::before { content: ''; position: absolute; left: 0; top: 1.05em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.slide__bullets li strong { color: var(--text); font-weight: 500; }
+.aside-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: clamp(18px, 3vh, 30px); }
+.aside-card .num { font-family: var(--font-display); font-size: clamp(40px, 6vw, 72px); color: var(--accent); line-height: 1; }
+.aside-card .cap { font-family: var(--font-mono); font-size: clamp(10px, 1.2vw, 13px); letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-top: 8px; }
+.aside-card + .aside-card { margin-top: 12px; }
+
+/* question grid */
+.qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(10px, 1.6vh, 16px); margin-top: clamp(14px, 2.5vh, 24px); width: 100%; }
+.qcard { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: clamp(12px, 2vh, 20px) clamp(14px, 1.8vw, 22px); min-width: 0; }
+.qcard p { font-size: clamp(14px, 1.7vw, 19px); line-height: 1.45; color: var(--text); }
+.qcard .tool { font-family: var(--font-mono); font-size: clamp(9px, 1.1vw, 12px); color: var(--accent); background: var(--accent-dim); border-radius: 10px; padding: 2px 9px; display: inline-block; margin-top: 8px; }
+.qcard--wide { grid-column: 1 / -1; }
+
+/* split */
+.slide--split { padding: 0; }
+.slide--split .slide__panels { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
+.slide--split .slide__panel { padding: clamp(40px, 6vh, 80px) clamp(32px, 4vw, 60px); display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.slide--split .slide__panel--primary { background: var(--surface); }
+.slide--split .slide__panel--secondary { background: var(--bg); }
+
+/* kpis */
+.slide__kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(clamp(150px, 21vw, 230px), 1fr)); gap: clamp(12px, 2vw, 24px); margin-top: clamp(16px, 3vh, 30px); }
+.slide__kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: clamp(16px, 3vh, 30px) clamp(16px, 2vw, 24px); min-width: 0; overflow: hidden; }
+.slide__kpi-val { font-family: var(--font-display); font-size: clamp(34px, 5.5vw, 60px); line-height: 1.05; color: var(--accent); white-space: nowrap; }
+.slide__kpi-label { font-family: var(--font-mono); font-size: clamp(9px, 1.15vw, 12px); font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); margin-top: 10px; line-height: 1.5; }
+
+/* quote */
+.slide--quote { justify-content: center; align-items: center; text-align: center; padding: clamp(60px, 10vh, 120px) clamp(60px, 12vw, 200px); }
+.slide__quote-mark { font-family: var(--font-display); font-size: clamp(90px, 14vw, 180px); line-height: 0.5; opacity: 0.1; color: var(--accent); pointer-events: none; margin-bottom: -14px; }
+.slide--quote blockquote { font-family: var(--font-display); font-size: clamp(26px, 4vw, 50px); font-style: italic; font-weight: 400; line-height: 1.3; }
+.slide--quote cite { font-family: var(--font-mono); font-size: clamp(10px, 1.3vw, 14px); font-style: normal; margin-top: clamp(16px, 3vh, 32px); display: block; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
+
+/* diagram */
+.slide--diagram { padding: clamp(24px, 4vh, 48px) clamp(24px, 4vw, 60px); }
+.slide--diagram .mermaid-wrap { flex: 1; min-height: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; display: flex; align-items: center; justify-content: center; overflow: auto; margin-top: clamp(10px, 2vh, 18px); padding: clamp(10px, 2vh, 20px); }
+.slide--diagram .mermaid { transform-origin: center center; width: 100%; display: flex; justify-content: center; }
+.slide--diagram .mermaid svg { max-width: 96%; }
+.mermaid .nodeLabel { font-family: var(--font-body) !important; font-size: 18px !important; }
+.mermaid .edgeLabel { font-family: var(--font-mono) !important; font-size: 13px !important; }
+
+/* plan board */
+.plan { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: clamp(12px, 1.8vw, 22px); margin-top: clamp(14px, 2.5vh, 24px); flex: 0 1 auto; min-height: 0; }
+.plan__col { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: clamp(14px, 2.2vh, 24px); min-width: 0; }
+.plan__col h3 { font-family: var(--font-mono); font-size: clamp(10px, 1.2vw, 13px); letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+.plan__col .pts { font-family: var(--font-mono); font-size: clamp(9px, 1.05vw, 12px); color: var(--text-dim); margin-bottom: clamp(8px, 1.5vh, 14px); }
+.plan__item { font-size: clamp(12.5px, 1.45vw, 16px); color: var(--text); padding: clamp(4px, 0.8vh, 7px) 0; border-top: 1px solid var(--border); line-height: 1.4; }
+.plan__item:first-of-type { border-top: none; }
+.plan__item span { font-family: var(--font-mono); font-size: 0.78em; color: var(--text-dim); }
+
+/* bleed */
+.slide--bleed { padding: 0; justify-content: flex-end; }
+.slide--bleed .slide__bg--gradient { background: radial-gradient(ellipse at 50% 100%, rgba(212,167,58,0.3) 0%, transparent 55%), linear-gradient(200deg, #0a0f1e 0%, #16224a 100%); }
+.slide--bleed .slide__scrim { position: absolute; inset: 0; background: linear-gradient(to top, rgba(10,15,30,0.85) 0%, rgba(10,15,30,0.2) 55%, transparent 100%); z-index: 1; }
+.slide--bleed .slide__content { position: relative; z-index: 2; padding: clamp(40px, 6vh, 80px) clamp(40px, 8vw, 120px); }
+.ladder-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(14px, 2.5vw, 32px); margin-top: clamp(16px, 3vh, 30px); }
+.ladder-cell .when { font-family: var(--font-mono); font-size: clamp(10px, 1.2vw, 13px); letter-spacing: 2px; text-transform: uppercase; color: var(--accent); }
+.ladder-cell h3 { font-family: var(--font-display); font-size: clamp(20px, 2.8vw, 32px); margin: 6px 0 6px; font-weight: 400; }
+.ladder-cell p { font-size: clamp(13px, 1.5vw, 17px); line-height: 1.5; color: rgba(232,228,216,0.75); }
+
+/* chrome */
+.deck-progress { position: fixed; top: 0; left: 0; height: 3px; background: var(--accent); z-index: 100; transition: width 0.3s ease; pointer-events: none; }
+.deck-dots { position: fixed; right: clamp(12px, 2vw, 24px); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 100; background: color-mix(in srgb, var(--bg) 60%, transparent 40%); padding: 8px 6px; border-radius: 20px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.deck-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); opacity: 0.3; border: none; padding: 0; cursor: pointer; transition: opacity 0.2s ease, transform 0.2s ease; }
+.deck-dot:hover { opacity: 0.6; }
+.deck-dot.active { opacity: 1; transform: scale(1.5); background: var(--accent); }
+.deck-counter { position: fixed; bottom: clamp(12px, 2vh, 24px); right: clamp(12px, 2vw, 24px); font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); z-index: 100; font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+.deck-hints { position: fixed; bottom: clamp(12px, 2vh, 24px); left: 50%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); opacity: 0.6; z-index: 100; transition: opacity 0.5s ease; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+.deck-hints.faded { opacity: 0; pointer-events: none; }
+
+@media (max-height: 700px) {
+  .slide { padding: clamp(24px, 4vh, 40px) clamp(32px, 6vw, 80px); }
+  .slide__display { font-size: clamp(38px, 8vw, 72px); }
+  .slide--divider .slide__number { font-size: clamp(80px, 16vw, 160px); }
+}
+@media (max-width: 820px) {
+  .slide--content .slide__inner, .slide--content.slide--right .slide__inner { grid-template-columns: 1fr; }
+  .slide__aside { display: none; }
+  .slide--split .slide__panels { grid-template-columns: 1fr; }
+  .qgrid { grid-template-columns: 1fr; }
+  .plan { grid-template-columns: 1fr; }
+  .ladder-row { grid-template-columns: 1fr; }
+  .deck-dots { display: none; }
+}
+</style>
+</head>
+<body>
+<!-- surf image generation timed out, using CSS gradient backgrounds for title and ladder slides -->
+<div class="deck">
+
+<!-- 1 · title -->
+<section class="slide slide--title">
+  <div class="slide__bg slide__bg--gradient" id="bg-title"></div>
+  <div class="slide__scrim"></div>
+  <div class="slide__content">
+    <p class="slide__label reveal">Kode Health · Audit</p>
+    <h1 class="slide__display reveal">Productivity Assistant</h1>
+    <p class="slide__subtitle reveal" style="margin-top:10px;">in the UI: <strong style="color:var(--accent);">Kopilot</strong>, K per Kode tradition</p>
+    <div class="kicker-rule reveal"></div>
+    <p class="slide__subtitle reveal">research · architecture · plan &nbsp;·&nbsp; August 2026</p>
+  </div>
+</section>
+
+<!-- 2 · quote -->
+<section class="slide slide--quote slide--glow-tr">
+  <div class="slide__quote-mark reveal">&ldquo;</div>
+  <blockquote class="reveal">What should I be worried about?</blockquote>
+  <cite class="reveal">The question every audit manager is really asking</cite>
+</section>
+
+<!-- 3 · the bet -->
+<section class="slide slide--content slide--glow-bl">
+  <div class="slide__inner">
+    <div class="slide__text">
+      <p class="slide__label reveal">The bet</p>
+      <h2 class="slide__heading reveal">Asking beats hunting</h2>
+      <ul class="slide__bullets">
+        <li class="reveal">The productivity dashboard already answers these questions, but you have to <strong>hunt</strong>: pick the right tab, set the right filter, do the mental math</li>
+        <li class="reveal">The bet is that <strong>asking is faster</strong>. Type the question, get the answer with the numbers, in seconds</li>
+        <li class="reveal">If we are right, AI becomes part of the workflow and we have a <strong>proven pattern</strong> to carry across the app</li>
+        <li class="reveal">If we are wrong, we find out <strong>cheap</strong></li>
+      </ul>
+    </div>
+    <div class="slide__aside reveal">
+      <div class="aside-card"><div class="num">7</div><div class="cap">questions the assistant answers at go-live</div></div>
+      <div class="aside-card"><div class="num">0</div><div class="cap">numbers computed by the model. Code does the math</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · the questions -->
+<section class="slide slide--glow-tr">
+  <p class="slide__label reveal">The value</p>
+  <h2 class="slide__heading reveal">Questions we want answered</h2>
+  <p class="slide__body reveal" style="max-width:980px; margin-top:10px;">The purpose is to embed AI into the audit application so it brings real value to our admins. These questions, among others, are what the tools were derived from, and all of them work at launch.</p>
+  <div class="qgrid reveal">
+    <div class="qcard"><p>Is someone overloaded, and should we redistribute work to be more fair?</p><span class="tool">workload</span></div>
+    <div class="qcard"><p>Who should I assign when the next audit comes open?</p><span class="tool">roster + workload</span></div>
+    <div class="qcard"><p>How does productivity look? Who is underproducing or overproducing?</p><span class="tool">productivity</span></div>
+    <div class="qcard"><p>What is sitting unassigned, and what has been sitting open too long?</p><span class="tool">workload</span></div>
+    <div class="qcard"><p>Are our completion time expectations right, given what the team actually does?</p><span class="tool">time_expectations</span></div>
+    <div class="qcard"><p>Is a client or chart kind an outlier on scores, or trending down?</p><span class="tool">scores</span></div>
+    <div class="qcard qcard--wide"><p>Is one auditor producing results out of alignment with their peers?</p><span class="tool">productivity for output · scores for calibration</span></div>
+  </div>
+</section>
+
+<!-- 5 · divider -->
+<section class="slide slide--divider">
+  <span class="slide__number">01</span>
+  <div class="slide__content" style="text-align:center;">
+    <p class="slide__label reveal">Section one</p>
+    <h2 class="slide__heading reveal">The experiment</h2>
+  </div>
+</section>
+
+<!-- 6 · jill split -->
+<section class="slide slide--split">
+  <div class="slide__panels">
+    <div class="slide__panel slide__panel--primary">
+      <p class="slide__label reveal">The rollout</p>
+      <h2 class="slide__heading reveal">Pilot with one admin first</h2>
+      <p class="slide__body reveal" style="margin-top:16px;">The pilot starts with an admin who already lives in this dashboard and asks these questions every week. They will tell us straight whether asking beats clicking around.</p>
+      <p class="slide__body reveal" style="margin-top:14px;">We sit with them first and collect the questions they actually ask. Those become the suggested prompts and the test set. <strong style="color:var(--text);">We are not inventing questions in a conference room.</strong></p>
+    </div>
+    <div class="slide__panel slide__panel--secondary">
+      <p class="slide__label reveal">What going well looks like</p>
+      <ul class="slide__bullets">
+        <li class="reveal">They open it on their own, more than once a week, unprompted</li>
+        <li class="reveal">Answers match the dashboard exactly, tested continuously, not by vibes</li>
+        <li class="reveal">At least one real decision happens because the assistant surfaced something</li>
+        <li class="reveal">Their question list keeps growing, which means they trust it enough to push it</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 7 · divider -->
+<section class="slide slide--divider">
+  <span class="slide__number">02</span>
+  <div class="slide__content" style="text-align:center;">
+    <p class="slide__label reveal">Section two</p>
+    <h2 class="slide__heading reveal">What the research taught us</h2>
+    <p class="slide__subtitle reveal" style="margin-top:10px;">Shopify Sidekick and Roast · Anthropic tool guidance · verified gem and platform findings</p>
+  </div>
+</section>
+
+<!-- 8 · sidekick lessons -->
+<section class="slide slide--content slide--right slide--glow-bl">
+  <div class="slide__inner">
+    <div class="slide__aside reveal">
+      <div class="aside-card"><div class="num">1</div><div class="cap">agent. Simple, with well designed tools. Not multi-agent</div></div>
+      <div class="aside-card"><div class="num">0.02&rarr;0.61</div><div class="cap">Shopify's LLM judge agreement, iterated against a 0.69 human ceiling</div></div>
+    </div>
+    <div class="slide__text">
+      <p class="slide__label reveal">Production lessons · Shopify Sidekick</p>
+      <h2 class="slide__heading reveal">The playbook already exists</h2>
+      <ul class="slide__bullets">
+        <li class="reveal"><strong>One simple agent with good tools</strong> beat predefined workflows and multi-agent designs for an in-admin assistant on Rails</li>
+        <li class="reveal"><strong>Just in time instructions</strong>: tool guidance rides in tool responses, not in a bloated system prompt. Lean, cache friendly, no death by a thousand instructions</li>
+        <li class="reveal"><strong>Preview and commit</strong>: the AI proposes, the human signs off. Sidekick never mutates shop state directly</li>
+        <li class="reveal"><strong>Evals, not vibes</strong>: real labeled conversations, measured agreement, iterated. Vibe testing is how quality quietly rots</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 9 · quote -->
+<section class="slide slide--quote">
+  <div class="slide__quote-mark reveal">&ldquo;</div>
+  <blockquote class="reveal">Non-determinism is the enemy of reliability.</blockquote>
+  <cite class="reveal">Shopify Engineering, on why they constrain AI with structure</cite>
+</section>
+
+<!-- 10 · tool design -->
+<section class="slide slide--content slide--glow-tr">
+  <div class="slide__inner">
+    <div class="slide__text">
+      <p class="slide__label reveal">Tool design</p>
+      <h2 class="slide__heading reveal">Few tools, rich parameters</h2>
+      <ul class="slide__bullets">
+        <li class="reveal">An earlier sketch had <strong>19 tools</strong>. Overlapping tools are how models pick the wrong one. Consolidation collapsed them to <strong>5</strong>, parameters do the work</li>
+        <li class="reveal">Tools accept <strong>human names, never internal IDs</strong>. Models mangle opaque identifiers, and an admin says Gary, not auditor 42</li>
+        <li class="reveal">Parameters <strong>constrain rather than guess</strong>: valid names live in the tool schema, ambiguity comes back as a clarifying question</li>
+        <li class="reveal">Every tool reuses the <strong>same authorization and the same query objects</strong> the dashboard renders from. Chat answers and on-screen numbers cannot disagree</li>
+      </ul>
+    </div>
+    <div class="slide__aside reveal">
+      <div class="aside-card"><div class="num">19&rarr;5</div><div class="cap">tools after consolidation</div></div>
+      <div class="aside-card"><div class="num">0-20</div><div class="cap">the debuggable tool budget, per Shopify's production guidance</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 · verified groundwork kpis -->
+<section class="slide slide--glow-bl">
+  <p class="slide__label reveal">Verified, not assumed</p>
+  <h2 class="slide__heading reveal">The groundwork is already proven</h2>
+  <div class="slide__kpis">
+    <div class="slide__kpi reveal"><div class="slide__kpi-val">1.16</div><div class="slide__kpi-label">RubyLLM pinned. Chat, tools, streaming, persistence, Bedrock provider, 10M+ downloads</div></div>
+    <div class="slide__kpi reveal"><div class="slide__kpi-val">Active</div><div class="slide__kpi-label">Org level AWS BAA, effective June 2026, covers every member account</div></div>
+    <div class="slide__kpi reveal"><div class="slide__kpi-val">Proven</div><div class="slide__kpi-label">Claude Sonnet 5 answering from our staging account, verified August 3</div></div>
+    <div class="slide__kpi reveal"><div class="slide__kpi-val">0</div><div class="slide__kpi-label">New infrastructure. Sidekiq, Redis, Action Cable already run in production</div></div>
+  </div>
+  <p class="slide__body reveal" style="margin-top:clamp(14px,2.5vh,24px); max-width:900px;">Bedrock keeps every prompt inside our AWS boundary: nothing reaches any model vendor, nothing is trained on, and the guarantees attach to Bedrock rather than the model, so swapping models later, even across AI labs, is a config change.</p>
+</section>
+
+<!-- 12 · divider -->
+<section class="slide slide--divider">
+  <span class="slide__number">03</span>
+  <div class="slide__content" style="text-align:center;">
+    <p class="slide__label reveal">Section three</p>
+    <h2 class="slide__heading reveal">The architecture</h2>
+  </div>
+</section>
+
+<!-- 13 · diagram -->
+<section class="slide slide--diagram">
+  <p class="slide__label reveal">Request and data flow</p>
+  <h2 class="slide__heading reveal" style="font-size:clamp(24px,3.5vw,38px);">One loop, inside the boundary</h2>
+  <div class="mermaid-wrap reveal">
+    <pre class="mermaid">
+flowchart LR
+  RAIL["Chat rail on the dashboard"] -->|"question"| JOB["Sidekiq job"]
+  JOB --> LOOP["RubyLLM agent loop"]
+  LOOP <-->|"history"| DB[("Postgres")]
+  LOOP -->|"prompt + tools"| BR["Bedrock: AWS boundary, BAA"]
+  BR <--> FM["Foundation model, swappable by config"]
+  BR -->|"tool_use"| TOOLS["Tool layer: authz, names"]
+  TOOLS --> QO["Dashboard query objects"]
+  QO -->|"numbers"| LOOP
+  LOOP -->|"streamed answer"| RAIL
+    </pre>
+  </div>
+</section>
+
+<!-- 14 · guardrails -->
+<section class="slide slide--content slide--right slide--glow-tr">
+  <div class="slide__inner">
+    <div class="slide__aside reveal">
+      <div class="aside-card"><div class="num">Read</div><div class="cap">only. It answers questions. It does not touch data</div></div>
+      <div class="aside-card"><div class="num">Gate</div><div class="cap">same Pundit policy as the dashboard, allowlisted until the flip</div></div>
+    </div>
+    <div class="slide__text">
+      <p class="slide__label reveal">Trust</p>
+      <h2 class="slide__heading reveal">Guardrails before cleverness</h2>
+      <ul class="slide__bullets">
+        <li class="reveal">Deterministic code computes <strong>every number</strong>. The model selects tools and narrates. Number fidelity is asserted in evals</li>
+        <li class="reveal"><strong>Write actions wait</strong> for the next rung, and arrive behind preview and commit when they do</li>
+        <li class="reveal">Chat history lives in Postgres under the <strong>same retention rules</strong> as the rest of the audit database</li>
+        <li class="reveal">A defined lane: productivity, workload, and quality score questions. Everything else gets a <strong>polite decline</strong></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 15 · divider -->
+<section class="slide slide--divider">
+  <span class="slide__number">04</span>
+  <div class="slide__content" style="text-align:center;">
+    <p class="slide__label reveal">Section four</p>
+    <h2 class="slide__heading reveal">The plan</h2>
+    <p class="slide__subtitle reveal" style="margin-top:10px;">fifteen cards in Linear, numbered in build order</p>
+  </div>
+</section>
+
+<!-- 16 · plan board -->
+<section class="slide slide--glow-bl">
+  <p class="slide__label reveal">AUD-886 through AUD-900</p>
+  <h2 class="slide__heading reveal" style="font-size:clamp(24px,3.5vw,38px);">Foundation, go-live, then keep it honest</h2>
+  <div class="plan reveal">
+    <div class="plan__col">
+      <h3>Foundation</h3><div class="pts">3 cards · 7 points · invisible</div>
+      <div class="plan__item">RubyLLM + Bedrock plumbing <span>886</span></div>
+      <div class="plan__item">Chat persistence tables <span>887</span></div>
+      <div class="plan__item">Tool seam + productivity tool <span>888</span></div>
+    </div>
+    <div class="plan__col">
+      <h3>Go-live (MVP)</h3><div class="pts">9 cards · 20 points · every question answered</div>
+      <div class="plan__item">Workload · roster · scores · time expectations tools <span>889-892</span></div>
+      <div class="plan__item">Chat rail embedded in the dashboard <span>893</span></div>
+      <div class="plan__item">Streamed answers over Action Cable <span>894</span></div>
+      <div class="plan__item">System prompt and guardrails <span>895</span></div>
+      <div class="plan__item">Question chips <span>896</span></div>
+      <div class="plan__item">Enable for all dashboard admins <span>897</span></div>
+    </div>
+    <div class="plan__col">
+      <h3>After</h3><div class="pts">2 cards · 4 points · plus one spike</div>
+      <div class="plan__item">Eval harness <span>898</span></div>
+      <div class="plan__item">Observability + cost <span>899</span></div>
+      <div class="plan__item">MCP server spike <span>900 · unscheduled</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 17 · ladder bleed -->
+<section class="slide slide--bleed">
+  <div class="slide__bg slide__bg--gradient" id="bg-ladder"></div>
+  <div class="slide__scrim"></div>
+  <div class="slide__content">
+    <p class="slide__label reveal">The ladder</p>
+    <h2 class="slide__heading reveal">This project is the first rung</h2>
+    <div class="ladder-row reveal">
+      <div class="ladder-cell"><div class="when">Now</div><h3>Ask and answer</h3><p>Read only Q&amp;A in the rail. Every question on the list, live at launch.</p></div>
+      <div class="ladder-cell"><div class="when">Next, if it goes well</div><h3>Propose actions</h3><p>Draft a reassignment, show a preview, the human commits. Suggestions and trend flags.</p></div>
+      <div class="ladder-cell"><div class="when">Later, if it goes really well</div><h3>Render and spread</h3><p>Charts and tables as answers. The same tool conventions, and the Kopilot name, carry to other pages and other Kode apps.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 18 · closing -->
+<section class="slide slide--content slide--glow-tr">
+  <div class="slide__inner">
+    <div class="slide__text">
+      <p class="slide__label reveal">Where this leaves us</p>
+      <h2 class="slide__heading reveal">Ready to build</h2>
+      <ul class="slide__bullets">
+        <li class="reveal">Staging invokes Claude today, the BAA is confirmed, and the plan is fifteen pointed cards in Linear</li>
+        <li class="reveal">First moves: <strong>AUD-886</strong> plumbing, and a sit down with our pilot admin to collect their real questions</li>
+        <li class="reveal">Conventions get documented as we go, so the second assistant surface is cheaper than the first</li>
+        <li class="reveal">Full detail: the PRD and the architecture brief, both linked from the Linear project</li>
+      </ul>
+    </div>
+    <div class="slide__aside reveal">
+      <div class="aside-card"><div class="num">27</div><div class="cap">points from empty repo to every admin seeing the rail</div></div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  themeVariables: {
+    fontFamily: "'DM Sans', system-ui, sans-serif",
+    fontSize: '20px',
+    primaryColor: '#1d2b52',
+    edgeLabelBackground: '#0f1729',
+    primaryBorderColor: '#d4a73a',
+    primaryTextColor: '#e8e4d8',
+    lineColor: '#a49e8e',
+    clusterBkg: 'rgba(212,167,58,0.05)',
+    clusterBorder: 'rgba(212,167,58,0.3)'
+  }
+});
+
+function autoFit() {
+  document.querySelectorAll('.mermaid svg').forEach(function(svg) {
+    svg.removeAttribute('height');
+    svg.removeAttribute('width');
+    var wrap = svg.closest('.mermaid-wrap');
+    svg.style.maxWidth = '96%';
+    svg.style.maxHeight = wrap ? (wrap.clientHeight - 24) + 'px' : '70vh';
+    svg.style.width = 'auto';
+    svg.style.height = 'auto';
+  });
+  document.querySelectorAll('.slide__kpi-val').forEach(function(el) {
+    if (el.scrollWidth > el.clientWidth) {
+      var s = el.clientWidth / el.scrollWidth;
+      el.style.transform = 'scale(' + s + ')';
+      el.style.transformOrigin = 'left top';
+    }
+  });
+}
+
+class SlideEngine {
+  constructor() {
+    this.deck = document.querySelector('.deck');
+    this.slides = [...document.querySelectorAll('.slide')];
+    this.current = 0;
+    this.total = this.slides.length;
+    this.buildChrome();
+    this.bindEvents();
+    this.observe();
+    this.update();
+  }
+  buildChrome() {
+    var bar = document.createElement('div');
+    bar.className = 'deck-progress';
+    document.body.appendChild(bar);
+    this.bar = bar;
+    var dots = document.createElement('div');
+    dots.className = 'deck-dots';
+    var self = this;
+    this.slides.forEach(function(_, i) {
+      var d = document.createElement('button');
+      d.className = 'deck-dot';
+      d.title = 'Slide ' + (i + 1);
+      d.onclick = function() { self.goTo(i); };
+      dots.appendChild(d);
+    });
+    document.body.appendChild(dots);
+    this.dots = [].slice.call(dots.children);
+    var ctr = document.createElement('div');
+    ctr.className = 'deck-counter';
+    document.body.appendChild(ctr);
+    this.counter = ctr;
+    var hints = document.createElement('div');
+    hints.className = 'deck-hints';
+    hints.textContent = '← → or scroll to navigate';
+    document.body.appendChild(hints);
+    this.hints = hints;
+    this.hintTimer = setTimeout(function() { hints.classList.add('faded'); }, 4000);
+  }
+  bindEvents() {
+    var self = this;
+    document.addEventListener('keydown', function(e) {
+      if (e.target.closest('.mermaid-wrap, input, textarea, [contenteditable]')) return;
+      if (['ArrowDown', 'ArrowRight', ' ', 'PageDown'].includes(e.key)) { e.preventDefault(); self.next(); }
+      else if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); self.prev(); }
+      else if (e.key === 'Home') { e.preventDefault(); self.goTo(0); }
+      else if (e.key === 'End') { e.preventDefault(); self.goTo(self.total - 1); }
+      self.fadeHints();
+    });
+    var touchY;
+    this.deck.addEventListener('touchstart', function(e) { touchY = e.touches[0].clientY; }, { passive: true });
+    this.deck.addEventListener('touchend', function(e) {
+      var dy = touchY - e.changedTouches[0].clientY;
+      if (Math.abs(dy) > 50) { dy > 0 ? self.next() : self.prev(); }
+    });
+  }
+  observe() {
+    var self = this;
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          self.current = self.slides.indexOf(entry.target);
+          self.update();
+        }
+      });
+    }, { threshold: 0.5 });
+    this.slides.forEach(function(s) { obs.observe(s); });
+  }
+  goTo(i) { this.slides[Math.max(0, Math.min(i, this.total - 1))].scrollIntoView({ behavior: 'smooth' }); }
+  next() { if (this.current < this.total - 1) this.goTo(this.current + 1); }
+  prev() { if (this.current > 0) this.goTo(this.current - 1); }
+  update() {
+    this.bar.style.width = ((this.current + 1) / this.total * 100) + '%';
+    var self = this;
+    this.dots.forEach(function(d, i) { d.classList.toggle('active', i === self.current); });
+    this.counter.textContent = (this.current + 1) + ' / ' + this.total;
+  }
+  fadeHints() { clearTimeout(this.hintTimer); this.hints.classList.add('faded'); }
+}
+
+async function boot() {
+  const nodes = document.querySelectorAll('.mermaid');
+  for (const node of nodes) {
+    const code = node.textContent.trim();
+    const id = 'mm-' + Math.random().toString(36).slice(2, 8);
+    try {
+      const { svg } = await mermaid.render(id, code);
+      node.innerHTML = svg;
+    } catch (e) { console.error(e); }
+  }
+  autoFit();
+  new SlideEngine();
+}
+try { await document.fonts.load("18px 'DM Sans'"); await document.fonts.ready; } catch (e) {}
+boot();
+</script>
+</body>
+</html>
