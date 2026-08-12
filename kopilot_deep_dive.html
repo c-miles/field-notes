@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kopilot Deep Dive: How the Assistant Is Built</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
+  --paper: #102033;
+  --paper2: #1a2b44;
+  --paper3: #223550;
+  --ink: #edeae0;
+  --ink-dim: #a3aebb;
+  --ink-deep: #102033;
+  --line: rgba(237, 234, 224, 0.14);
+  --accent: #f79226;
+  --accent-soft: rgba(247, 146, 38, 0.1);
+  --code-bg: #0a1420;
+  --code-text: #e8e4d8;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); }
+
+/* Fixed stage: slides stack in one place and crossfade. Nothing scrolls,
+   so arrow navigation can never stutter and content stays centered. */
+.deck { position: fixed; inset: 0; }
+.slide {
+  position: absolute; inset: 0;
+  background: var(--paper);
+  display: flex; flex-direction: column; justify-content: center;
+  padding: clamp(40px, 7vh, 90px) clamp(44px, 9vw, 150px);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: none;
+}
+.slide.active {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transition: opacity 0.4s ease;
+}
+.slide .reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.5s ease, transform 0.5s ease; }
+.slide.active .reveal { opacity: 1; transform: none; }
+.slide.active .reveal:nth-of-type(1) { transition-delay: 0.08s; }
+.slide.active .reveal:nth-of-type(2) { transition-delay: 0.16s; }
+.slide.active .reveal:nth-of-type(3) { transition-delay: 0.24s; }
+.slide.active .reveal:nth-of-type(4) { transition-delay: 0.32s; }
+.slide.active .reveal:nth-of-type(5) { transition-delay: 0.4s; }
+.slide.active .reveal:nth-of-type(6) { transition-delay: 0.48s; }
+@media (prefers-reduced-motion: reduce) {
+  .slide, .slide .reveal { transition: none !important; transform: none !important; }
+}
+
+.slide__label { font-family: var(--font-mono); font-size: clamp(10px, 1.2vw, 14px); font-weight: 600; text-transform: uppercase; letter-spacing: 2.5px; color: var(--accent); margin-bottom: clamp(12px, 2.2vh, 22px); }
+.slide__display { font-family: var(--font-display); font-weight: 460; font-size: clamp(46px, 8.2vw, 108px); letter-spacing: -1.5px; line-height: 1.02; text-wrap: balance; }
+.slide__heading { font-family: var(--font-display); font-weight: 500; font-size: clamp(30px, 4.6vw, 52px); letter-spacing: -0.6px; line-height: 1.08; text-wrap: balance; }
+.slide__body { font-size: clamp(15px, 1.9vw, 21px); line-height: 1.65; color: var(--ink-dim); text-wrap: pretty; max-width: 62ch; }
+.slide__body strong, .slide__bullets strong { color: var(--ink); font-weight: 600; }
+.mono { font-family: var(--font-mono); font-size: 0.92em; }
+
+.slide__bullets { list-style: none; margin-top: clamp(14px, 2.6vh, 26px); }
+.slide__bullets li { padding: clamp(7px, 1.3vh, 12px) 0 clamp(7px, 1.3vh, 12px) 26px; position: relative; font-size: clamp(14.5px, 1.75vw, 20px); line-height: 1.55; color: var(--ink-dim); }
+.slide__bullets li::before { content: ''; position: absolute; left: 2px; top: 1.15em; width: 12px; height: 2px; background: var(--accent); }
+
+/* title */
+.slide--title { align-items: center; text-align: center; padding: 0; }
+.slide--title .bg { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.slide--title .bg--fallback { background:
+  radial-gradient(ellipse at 78% 18%, rgba(247, 146, 38, 0.16) 0%, transparent 52%),
+  linear-gradient(165deg, #16304d 0%, var(--paper) 55%, #0a1420 100%); }
+.slide--title .content { position: relative; z-index: 1; padding: 40px; max-width: 1100px; }
+.rule { width: 70px; height: 2px; background: var(--accent); margin: clamp(18px, 3vh, 30px) auto; }
+
+/* divider */
+.slide--divider { border-top: none; }
+.slide--divider .bignum { font-family: var(--font-display); font-weight: 300; font-size: clamp(140px, 26vw, 340px); line-height: 0.8; color: var(--ink); opacity: 0.07; position: absolute; right: clamp(30px, 6vw, 110px); top: 50%; transform: translateY(-52%); pointer-events: none; }
+
+/* two column */
+.cols { display: grid; grid-template-columns: 5fr 4fr; gap: clamp(28px, 5vw, 80px); align-items: center; width: 100%; }
+.cols--even { grid-template-columns: 1fr 1fr; }
+
+/* cards */
+.cardgrid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(12px, 1.8vh, 20px); margin-top: clamp(14px, 2.6vh, 26px); width: 100%; }
+.card { background: var(--paper2); border: 1px solid var(--line); border-radius: 12px; padding: clamp(14px, 2.4vh, 24px) clamp(16px, 2vw, 26px); box-shadow: 0 2px 6px rgba(0,0,0,0.22); min-width: 0; }
+.card h4 { font-family: var(--font-mono); font-size: clamp(11px, 1.3vw, 14px); letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+.card p { font-size: clamp(13.5px, 1.6vw, 18px); line-height: 1.55; color: var(--ink-dim); }
+.card p strong { color: var(--ink); }
+.card--wide { grid-column: 1 / -1; }
+/* The standout card flips to light on the dark deck. */
+.card--ink { background: var(--ink); border-color: var(--ink); }
+.card--ink h4 { color: #c36b19; }
+.card--ink p { color: #44566b; }
+.card--ink p strong { color: var(--ink-deep); }
+
+/* flow diagram */
+.flow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: clamp(8px, 1.2vw, 16px); margin-top: clamp(18px, 3.2vh, 32px); }
+.flow__node { background: var(--paper2); border: 1.5px solid var(--line); border-radius: 10px; padding: clamp(10px, 1.8vh, 18px) clamp(12px, 1.6vw, 22px); text-align: center; min-width: 0; }
+.flow__node b { display: block; font-size: clamp(13px, 1.5vw, 17px); font-weight: 600; color: var(--ink); }
+.flow__node span { display: block; font-family: var(--font-mono); font-size: clamp(9px, 1.05vw, 12px); color: var(--ink-dim); margin-top: 4px; }
+.flow__node--hot { border-color: var(--accent); background: var(--accent-soft); }
+/* The standout node flips to light on the dark deck. */
+.flow__node--ink { background: var(--ink); border-color: var(--ink); }
+.flow__node--ink b { color: var(--ink-deep); }
+.flow__node--ink span { color: #44566b; }
+.flow__arrow { font-family: var(--font-mono); color: var(--accent); font-size: clamp(14px, 1.8vw, 20px); flex: none; }
+
+/* numbered steps */
+.steps { counter-reset: step; margin-top: clamp(12px, 2.4vh, 24px); }
+.steps li { list-style: none; counter-increment: step; position: relative; padding: clamp(8px, 1.5vh, 13px) 0 clamp(8px, 1.5vh, 13px) 52px; font-size: clamp(14px, 1.7vw, 19px); line-height: 1.5; color: var(--ink-dim); }
+.steps li::before { content: counter(step); position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; background: var(--paper3); border: 1px solid var(--line); color: var(--ink); font-family: var(--font-mono); font-weight: 600; font-size: 14px; display: grid; place-items: center; }
+.steps li strong { color: var(--ink); }
+
+/* code panel */
+.code { background: var(--code-bg); color: var(--code-text); border: 1px solid var(--line); border-radius: 12px; padding: clamp(16px, 2.6vh, 28px) clamp(18px, 2.2vw, 30px); font-family: var(--font-mono); font-size: clamp(12px, 1.45vw, 16px); line-height: 1.75; overflow: hidden; }
+.code .c { color: #7d8aa0; }
+.code .k { color: #f7a145; }
+.code .s { color: #a9d18a; }
+
+/* stat band */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(12px, 2vw, 24px); margin-top: clamp(16px, 3vh, 30px); }
+.stat { border-top: 2px solid var(--accent); padding-top: clamp(10px, 1.8vh, 16px); }
+.stat b { font-family: var(--font-display); font-weight: 460; font-size: clamp(30px, 4.6vw, 54px); color: var(--ink); line-height: 1; display: block; }
+.stat span { font-family: var(--font-mono); font-size: clamp(9.5px, 1.1vw, 12.5px); text-transform: uppercase; letter-spacing: 1.5px; color: var(--ink-dim); display: block; margin-top: 8px; line-height: 1.5; }
+
+/* banner */
+.banner { display: inline-flex; align-items: center; gap: 10px; background: var(--accent-soft); border: 1px solid rgba(232,132,14,0.35); border-radius: 999px; padding: 8px 18px; font-family: var(--font-mono); font-size: clamp(11px, 1.3vw, 14px); color: var(--accent); margin-top: clamp(14px, 2.6vh, 24px); }
+.banner::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+/* schema mini-diagram */
+.schema { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(10px, 1.6vh, 18px); }
+.table-card { background: var(--paper2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.table-card header { background: var(--paper3); font-family: var(--font-mono); font-size: clamp(11px, 1.3vw, 14px); font-weight: 600; color: var(--ink); padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.table-card p { padding: 8px 14px; font-family: var(--font-mono); font-size: clamp(10px, 1.15vw, 12.5px); color: var(--ink-dim); line-height: 1.7; }
+
+/* chrome */
+.deck-progress { position: fixed; top: 0; left: 0; height: 3px; background: var(--accent); z-index: 100; transition: width 0.3s ease; pointer-events: none; }
+.deck-counter { position: fixed; bottom: 18px; right: 22px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); z-index: 100; font-variant-numeric: tabular-nums; }
+.deck-hints { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim); opacity: 0.7; z-index: 100; transition: opacity 0.5s ease; }
+.deck-hints.faded { opacity: 0; }
+.deck-dots { position: fixed; right: 16px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 7px; z-index: 100; }
+.deck-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); opacity: 0.28; border: none; padding: 0; cursor: pointer; transition: opacity 0.2s ease, transform 0.2s ease; }
+.deck-dot:hover { opacity: 0.5; }
+.deck-dot.active { opacity: 1; transform: scale(1.45); background: var(--accent); }
+</style>
+</head>
+<body>
+<div class="deck-progress" id="progress"></div>
+<div class="deck-counter" id="counter">1 / 1</div>
+<div class="deck-hints" id="hints">&larr; &rarr; or space to navigate</div>
+<nav class="deck-dots" id="dots" aria-label="Slide navigation"></nav>
+
+<div class="deck" id="deck">
+
+<!-- 1 · title -->
+<section class="slide slide--title active">
+  <div class="bg bg--fallback" id="title-bg"></div>
+  <div class="content">
+    <div class="slide__label reveal">Kode Health &middot; Audit &middot; August 2026</div>
+    <h1 class="slide__display reveal">Kopilot,<br>under the hood</h1>
+    <div class="rule reveal"></div>
+    <p class="slide__body reveal" style="margin: 0 auto;">How the productivity assistant is actually built. The choices, the plumbing, and why each piece is the way it is.</p>
+  </div>
+</section>
+
+<!-- 2 · what it is -->
+<section class="slide">
+  <div class="cols">
+    <div>
+      <div class="slide__label reveal">What we built</div>
+      <h2 class="slide__heading reveal">A chat rail that answers from the dashboard's own data</h2>
+      <p class="slide__body reveal" style="margin-top: 18px;">Admins ask questions in plain English, "who's overloaded right now?", and answers stream in beside the numbers they're asking about. Same read models the dashboard renders from, so the chat and the page can never disagree.</p>
+    </div>
+    <div>
+      <div class="card reveal"><h4>Read only</h4><p>The assistant <strong>cannot change anything</strong>, and its prompt says so plainly.</p></div>
+      <div class="card reveal" style="margin-top: 14px;"><h4>Admin gated</h4><p>System admins only for now, behind an <strong>environment kill switch</strong>. Production stays dark until we flip it.</p></div>
+      <div class="card reveal" style="margin-top: 14px;"><h4>Five tools</h4><p>Productivity, workload, roster, scores, and time expectations, each wrapping an <strong>existing read model</strong>.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · the principle -->
+<section class="slide" style="align-items: center; text-align: center;">
+  <div class="slide__label reveal">The one principle everything hangs on</div>
+  <h2 class="slide__display reveal" style="font-size: clamp(38px, 6vw, 80px);">Code computes.<br><em style="color: var(--accent);">The model narrates.</em></h2>
+  <p class="slide__body reveal" style="margin: clamp(18px, 3vh, 30px) auto 0;">Every number in every answer was computed by deterministic Ruby before the model ever saw it. The model's job is phrasing, not arithmetic. That is why Kopilot cannot hallucinate a figure, the worst it can do is describe a real one badly.</p>
+</section>
+
+<!-- 4 · architecture -->
+<section class="slide">
+  <div class="slide__label reveal">Architecture at a glance</div>
+  <h2 class="slide__heading reveal">One question's journey</h2>
+  <div class="flow reveal">
+    <div class="flow__node"><b>Chat rail</b><span>Turbo permanent</span></div>
+    <div class="flow__arrow">&rarr;</div>
+    <div class="flow__node"><b>Rails</b><span>persist + enqueue</span></div>
+    <div class="flow__arrow">&rarr;</div>
+    <div class="flow__node flow__node--hot"><b>Sidekiq</b><span>agent loop</span></div>
+    <div class="flow__arrow">&rarr;</div>
+    <div class="flow__node flow__node--hot"><b>RubyLLM</b><span>the gem</span></div>
+    <div class="flow__arrow">&rarr;</div>
+    <div class="flow__node flow__node--ink"><b>Bedrock</b><span>Claude, in our AWS</span></div>
+  </div>
+  <div class="flow reveal">
+    <div class="flow__node flow__node--ink"><b>Bedrock</b><span>wants data</span></div>
+    <div class="flow__arrow">&rarr;</div>
+    <div class="flow__node flow__node--hot"><b>Tools</b><span>plain Ruby objects</span></div>
+    <div class="flow__arrow">&rarr;</div>
+    <div class="flow__node"><b>Read models</b><span>the dashboard's queries</span></div>
+    <div class="flow__arrow">&rarr;</div>
+    <div class="flow__node"><b>Postgres</b><span>encrypted at rest</span></div>
+  </div>
+  <p class="slide__body reveal" style="margin-top: clamp(16px, 3vh, 28px);">Answers come back the other way: chunks stream from Bedrock through the job, over <strong>Turbo Streams on ActionCable</strong>, into the rail. No new infrastructure anywhere, Sidekiq, Redis, and Cable were already in production.</p>
+</section>
+
+<!-- 5 · divider: the AI layer -->
+<section class="slide slide--divider">
+  <div class="bignum">01</div>
+  <div class="slide__label reveal">Part one</div>
+  <h2 class="slide__display reveal" style="font-size: clamp(42px, 7vw, 92px);">The AI layer</h2>
+  <p class="slide__body reveal" style="margin-top: 16px;">RubyLLM, Bedrock, and why both.</p>
+</section>
+
+<!-- 6 · rubyllm what it gives us -->
+<section class="slide">
+  <div class="slide__label reveal">RubyLLM</div>
+  <h2 class="slide__heading reveal">One gem, four jobs we didn't have to build</h2>
+  <div class="cardgrid reveal">
+    <div class="card"><h4>Provider abstraction</h4><p><span class="mono">chat.ask</span> looks the same on any model. <strong>Model choice is config</strong>, an env var, not code.</p></div>
+    <div class="card"><h4>Rails persistence</h4><p>The <span class="mono">acts_as</span> family makes chats, messages, and tool calls <strong>ordinary ActiveRecord models</strong> in our schema.</p></div>
+    <div class="card"><h4>Tool calling</h4><p>Subclass, declare params, implement <span class="mono">execute</span>. The gem runs the <strong>whole call loop</strong> with the model.</p></div>
+    <div class="card"><h4>Streaming</h4><p>Pass a block to <span class="mono">complete</span> and <strong>chunks arrive as they're generated</strong>.</p></div>
+  </div>
+  <p class="slide__body reveal" style="margin-top: clamp(14px, 2.6vh, 24px);">Alternatives we weighed: langchainrb (heavier, weaker Rails story), the raw AWS SDK (no persistence, no tool loop, and AWS ships no Ruby examples), the official anthropic gem (no Rails layer). RubyLLM is the best documented Ruby path to Claude on Bedrock.</p>
+</section>
+
+<!-- 7 · rubyllm limitations -->
+<section class="slide">
+  <div class="cols">
+    <div>
+      <div class="slide__label reveal">RubyLLM, eyes open</div>
+      <h2 class="slide__heading reveal">Limitations we've validated</h2>
+      <p class="slide__body reveal" style="margin-top: 16px;">We smoke tested every feature against Bedrock before building on it, and hit three real gaps, each with a workaround in place.</p>
+    </div>
+    <div>
+      <ul class="slide__bullets">
+        <li class="reveal"><strong>No history windowing.</strong> Every persisted message replays to the model on every ask. Our conversation rotation is the mitigation.</li>
+        <li class="reveal"><strong>Prompt caching unreleased.</strong> The API exists upstream but hasn't shipped. Worth roughly 85 percent off input costs when it does.</li>
+        <li class="reveal"><strong>Bedrock feature lag.</strong> Registry, thinking replay, and schema gaps found early, documented, and worked around.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 8 · bedrock why -->
+<section class="slide" style="background-image: radial-gradient(ellipse at 80% 12%, var(--accent-soft) 0%, transparent 55%);">
+  <div class="slide__label reveal">Why Bedrock</div>
+  <h2 class="slide__heading reveal">PHI never leaves our AWS boundary</h2>
+  <p class="slide__body reveal" style="margin-top: 18px;">Bedrock is AWS's managed foundation model service. Claude runs inside an AWS owned account, <strong>Anthropic never sees our traffic</strong>, prompts are never used for training, and it's HIPAA eligible under the org's executed AWS BAA. Calling Anthropic's API directly was never on the table for this data.</p>
+  <div class="stats">
+    <div class="stat reveal"><b>BAA</b><span>executed with AWS, the compliance foundation</span></div>
+    <div class="stat reveal"><b>IAM</b><span>existing AWS auth and billing, no new vendor</span></div>
+    <div class="stat reveal"><b>Zero</b><span>prompts shared with the model provider</span></div>
+  </div>
+</section>
+
+<!-- 9 · bedrock mechanics -->
+<section class="slide">
+  <div class="cols">
+    <div>
+      <div class="slide__label reveal">Bedrock mechanics</div>
+      <h2 class="slide__heading reveal">What talking to it actually looks like</h2>
+      <ul class="slide__bullets">
+        <li class="reveal">We speak the <strong>Converse API</strong>, Bedrock's unified chat endpoint, which is what RubyLLM's provider renders to.</li>
+        <li class="reveal">Model IDs are <strong>cross region inference profiles</strong>. The <span class="mono">us.</span> prefix is required, base IDs fail with a 400.</li>
+        <li class="reveal">No server side tools on Bedrock, so <strong>all tool execution is client side in Rails</strong>, which is what we want anyway.</li>
+      </ul>
+    </div>
+    <div class="code reveal">
+      <div><span class="c"># config/initializers/ruby_llm.rb</span></div>
+      <div>RubyLLM.configure <span class="k">do</span> |config|</div>
+      <div>&nbsp;&nbsp;config.bedrock_api_key = aws.access_key_id</div>
+      <div>&nbsp;&nbsp;config.bedrock_secret_key = aws.secret_access_key</div>
+      <div>&nbsp;&nbsp;config.bedrock_region = aws.region</div>
+      <div>&nbsp;&nbsp;config.default_model =</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="s">"us.anthropic.claude-sonnet-4-6"</span></div>
+      <div><span class="k">end</span></div>
+      <div>&nbsp;</div>
+      <div><span class="c"># the model is an env var away from Opus</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 · divider data model -->
+<section class="slide slide--divider">
+  <div class="bignum">02</div>
+  <div class="slide__label reveal">Part two</div>
+  <h2 class="slide__display reveal" style="font-size: clamp(42px, 7vw, 92px);">The data model</h2>
+  <p class="slide__body reveal" style="margin-top: 16px;">Four tables, all ours, encrypted where it counts.</p>
+</section>
+
+<!-- 11 · schema -->
+<section class="slide">
+  <div class="cols cols--even">
+    <div>
+      <div class="slide__label reveal">The schema</div>
+      <h2 class="slide__heading reveal">acts_as makes them ordinary ActiveRecord</h2>
+      <p class="slide__body reveal" style="margin-top: 16px;">The gem's macros wire the associations and teach each record to convert itself into the model conversation. We own the tables, the migrations, and the encryption, <span class="mono">content</span> and thinking text encrypt like evaluation notes do.</p>
+      <p class="slide__body reveal" style="margin-top: 12px;"><strong>A consequence that shaped real code:</strong> encrypted columns can't be queried in SQL, so blank row filtering happens in Ruby after decryption.</p>
+    </div>
+    <div class="schema reveal">
+      <div class="table-card"><header>kopilot_chats</header><p>belongs_to :user<br>has_many :kopilot_messages</p></div>
+      <div class="table-card"><header>kopilot_messages</header><p>role, content&nbsp;&#128274;<br>tokens, thinking&nbsp;&#128274;</p></div>
+      <div class="table-card"><header>kopilot_tool_calls</header><p>name, arguments<br>belongs_to :message</p></div>
+      <div class="table-card"><header>kopilot_models</header><p>the registry row for<br>the model in use</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 · prepared seam -->
+<section class="slide">
+  <div class="cols">
+    <div>
+      <div class="slide__label reveal">The load bearing method</div>
+      <h2 class="slide__heading reveal">A chat row is not self sufficient</h2>
+      <p class="slide__body reveal" style="margin-top: 16px;">Tools live only on the in memory chat, and the system prompt embeds today's date, so it's a persisted row that gets rewritten when its text changes. <span class="mono">prepared</span> is the single seam that restores all of it. The answer job calls <span class="mono">chat.prepared.complete</span>, one method, nothing forgettable.</p>
+    </div>
+    <div class="code reveal">
+      <div><span class="c"># app/models/kopilot/chat.rb</span></div>
+      <div><span class="k">def</span> prepared</div>
+      <div>&nbsp;&nbsp;instructions = SystemPrompt.text</div>
+      <div>&nbsp;&nbsp;with_instructions(instructions, ...)</div>
+      <div>&nbsp;&nbsp;with_tools(</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;*TOOLS.map { it.new(user:) }</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.select(&amp;:allowed?)</div>
+      <div>&nbsp;&nbsp;)</div>
+      <div><span class="k">end</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 · divider tools -->
+<section class="slide slide--divider">
+  <div class="bignum">03</div>
+  <div class="slide__label reveal">Part three</div>
+  <h2 class="slide__display reveal" style="font-size: clamp(42px, 7vw, 92px);">Tools</h2>
+  <p class="slide__body reveal" style="margin-top: 16px;">How the model reaches our data, and only our data.</p>
+</section>
+
+<!-- 14 · tool round trip -->
+<section class="slide">
+  <div class="slide__label reveal">The round trip</div>
+  <h2 class="slide__heading reveal">How a tool call actually happens</h2>
+  <ol class="steps">
+    <li class="reveal">The model reads each tool's <strong>description</strong>, its routing signal for when to reach for it, and its <strong>param schema</strong>.</li>
+    <li class="reveal">It decides to call one. The gem validates the arguments and invokes <strong><span class="mono">execute</span></strong> on our plain Ruby object.</li>
+    <li class="reveal">The tool checks its <strong>policy</strong>, runs its <strong>read model</strong>, and returns a hash payload, every number precomputed.</li>
+    <li class="reveal">The payload persists as a tool result message and goes back to the model, ending with a <strong>guidance</strong> string telling it how to read what it got.</li>
+    <li class="reveal">Rounds repeat inside one <span class="mono">complete</span> call until the model has what it needs, then it writes the answer.</li>
+  </ol>
+</section>
+
+<!-- 15 · five tools -->
+<section class="slide">
+  <div class="slide__label reveal">The toolbox</div>
+  <h2 class="slide__heading reveal">Five tools, five read models</h2>
+  <div class="cardgrid reveal">
+    <div class="card"><h4>productivity</h4><p>Completed output per auditor, priced into <strong>productive hours</strong>, period comparisons.</p></div>
+    <div class="card"><h4>workload</h4><p>Open work right now, plus the <strong>unassigned queue</strong> and how long it has waited.</p></div>
+    <div class="card"><h4>roster</h4><p><strong>Who's qualified</strong> for what, per chart type and client, straight from specialties.</p></div>
+    <div class="card"><h4>scores</h4><p>Averages by client, chart type, coder, or auditor, with the <strong>95 threshold verdict</strong>.</p></div>
+    <div class="card card--wide"><h4>time_expectations</h4><p>Expected minutes against <strong>observed medians</strong>, are our prices still right?</p></div>
+  </div>
+  <p class="slide__body reveal" style="margin-top: clamp(12px, 2.2vh, 22px);">They compose. "Who should take this unassigned audit?" calls roster and workload together, eligible people first, then who has room.</p>
+</section>
+
+<!-- 16 · description vs guidance -->
+<section class="slide">
+  <div class="cols cols--even">
+    <div>
+      <div class="slide__label reveal">A deliberate split</div>
+      <h2 class="slide__heading reveal">Description vs guidance</h2>
+      <p class="slide__body reveal" style="margin-top: 16px;">Two kinds of instruction, delivered at two moments. <strong>Descriptions</strong> are pick time: when to reach for this tool and when not to. <strong>Guidance</strong> rides every payload, read time: how to interpret these fields, zero versus unknown, when not to volunteer the unassigned queue.</p>
+      <p class="slide__body reveal" style="margin-top: 12px;">Every payload also carries an <span class="mono">as_of</span> stamp, and the prompt tells the model to re-query rather than reuse a result from an earlier day. Data freshness is enforced, not hoped for.</p>
+    </div>
+    <div>
+      <div class="card card--ink reveal"><h4>Pick time</h4><p>"Use it for questions about output, who completed how much, and period over period comparisons..."</p></div>
+      <div class="card card--ink reveal" style="margin-top: 14px;"><h4>Read time</h4><p>"Every number here is precomputed, never add, average, or derive figures yourself..."</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 17 · system prompt -->
+<section class="slide">
+  <div class="cols">
+    <div>
+      <div class="slide__label reveal">The system prompt</div>
+      <h2 class="slide__heading reveal">A few hundred words, deliberately small</h2>
+      <ul class="slide__bullets">
+        <li class="reveal"><strong>Identity and lane.</strong> Productivity, workload, and scores. Politely decline everything else.</li>
+        <li class="reveal"><strong>Shared vocabulary.</strong> Auditors vs coders, initial rounds vs monthly, what "meets threshold" means.</li>
+        <li class="reveal"><strong>Panel rules.</strong> Answer at the scope of the question, tables only for what the dashboard doesn't show, no process narration.</li>
+        <li class="reveal"><strong>The calendar.</strong> Today's date and week boundaries, the one thing a model can never know.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="card reveal"><h4>What's deliberately not in it</h4><p>Tool specific knowledge lives in descriptions and guidance, not the prompt. Keeps the prompt <strong>stable and cacheable</strong>, and keeps each tool <strong>portable</strong>, ready for the MCP future where other clients drive the same tools.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 18 · divider conversation -->
+<section class="slide slide--divider">
+  <div class="bignum">04</div>
+  <div class="slide__label reveal">Part four</div>
+  <h2 class="slide__display reveal" style="font-size: clamp(42px, 7vw, 92px);">The conversation</h2>
+  <p class="slide__body reveal" style="margin-top: 16px;">Persistence, lifecycle, and the streaming pipeline.</p>
+</section>
+
+<!-- 19 · lifecycle -->
+<section class="slide">
+  <div class="cols">
+    <div>
+      <div class="slide__label reveal">Lifecycle</div>
+      <h2 class="slide__heading reveal">Conversations persist, and rotate when stale</h2>
+      <p class="slide__body reveal" style="margin-top: 16px;">Everything persists encrypted, and on every ask the entire conversation replays to the model. That's the gem's reality, so lifecycle is our cost and freshness lever. We benchmarked the field, Amazon Q, GitHub Copilot, and Notion AI all persist and resume, none reset on a calendar.</p>
+    </div>
+    <div>
+      <ul class="slide__bullets">
+        <li class="reveal"><strong>Resume by default</strong>, with a new conversation button.</li>
+        <li class="reveal"><strong>Rotate when stale:</strong> idle 12+ hours or 100+ messages, and only at send time, so page loads never strand orphan chats.</li>
+        <li class="reveal"><strong>Rail renders the last 50</strong> messages, the model keeps the rest until rotation.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 20 · ask flow -->
+<section class="slide">
+  <div class="slide__label reveal">End to end</div>
+  <h2 class="slide__heading reveal">From enter key to streamed answer</h2>
+  <ol class="steps">
+    <li class="reveal">Composer posts, the question <strong>persists immediately</strong>, and the answer job enqueues. The web request is done.</li>
+    <li class="reveal"><strong>Sidekiq runs the agent loop</strong> off the web thread, no retries, a per chat lock so two questions can't interleave.</li>
+    <li class="reveal">A <strong>thinking bubble</strong> with rotating phrases appears while tool rounds run, driven by the message lifecycle broadcasts.</li>
+    <li class="reveal">Chunks stream back, and every 50 characters the job <strong>re-renders the accumulated markdown</strong> into the bubble, tables assemble mid stream.</li>
+    <li class="reveal">Transport is <strong>Turbo Streams over ActionCable over Redis</strong>, WebSockets we already run. The finished answer replaces the bubble, fully formatted.</li>
+    <li class="reveal">Failures are honest: the stuck bubble clears and a plain <strong>"that answer didn't make it"</strong> appears. No eternal spinners.</li>
+  </ol>
+</section>
+
+<!-- 21 · markdown detail -->
+<section class="slide">
+  <div class="cols">
+    <div>
+      <div class="slide__label reveal">Rendering choice</div>
+      <h2 class="slide__heading reveal">Progressive markdown, server side</h2>
+      <p class="slide__body reveal" style="margin-top: 16px;">The model writes GitHub flavored markdown. We render it with <strong>Commonmarker</strong> plus a tight sanitize allowlist, and re-render the accumulated text on each flush, the same full re-parse approach the big chat products use, done server side so <strong>sanitization lives in exactly one place</strong>.</p>
+      <p class="slide__body reveal" style="margin-top: 12px;">Wide tables scroll in place inside the bubble. The rail never stretches, the page never scrolls sideways.</p>
+    </div>
+    <div>
+      <div class="stat reveal" style="margin-bottom: 20px;"><b>50 chars</b><span>per re-render flush, not per token, saves Redis publishes and browser reflows</span></div>
+      <div class="stat reveal" style="margin-bottom: 20px;"><b>~1.3 ms</b><span>measured cost of one full markdown render, cheap enough to repeat</span></div>
+      <div class="stat reveal"><b>0 new</b><span>JS dependencies, no client side parser, no second sanitize pipeline</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 22 · the rail -->
+<section class="slide">
+  <div class="slide__label reveal">The rail</div>
+  <h2 class="slide__heading reveal">The UI, briefly, and a caveat</h2>
+  <div class="cardgrid reveal">
+    <div class="card"><h4>Turbo permanent</h4><p>Conversation, collapse, and width <strong>survive tab switches</strong>, the rail never re-renders on navigation.</p></div>
+    <div class="card"><h4>Resizable</h4><p>Drag the divider, 320 to 560px, with a <strong>viewport cap</strong> so the rail yields before the dashboard.</p></div>
+    <div class="card"><h4>Keyboard</h4><p><strong>Cmd B / Ctrl B</strong> toggles it, the panel convention from the editors everyone uses.</p></div>
+    <div class="card"><h4>Composer</h4><p>Grows to six lines, shift enter for newlines, holds your question if a send fails.</p></div>
+  </div>
+  <div class="banner reveal">The UI and UX are up for debate, feedback welcome. The architecture underneath is the settled part.</div>
+</section>
+
+<!-- 23 · guardrails -->
+<section class="slide">
+  <div class="cols">
+    <div>
+      <div class="slide__label reveal">Guardrails</div>
+      <h2 class="slide__heading reveal">Dark by default, honest when it fails</h2>
+      <ul class="slide__bullets">
+        <li class="reveal"><span class="mono">KOPILOT_ENABLED</span> env flag: <strong>absent means the assistant doesn't exist</strong>. Production and review apps stay dark.</li>
+        <li class="reveal"><strong>KopilotPolicy</strong> owns who sees it, wherever it appears. System admins today, widens per surface later.</li>
+        <li class="reveal">A Kopilot failure <strong>never takes the dashboard down</strong>, the page renders without the rail.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="card reveal"><h4>Expectation setting</h4><p>Answer quality has <strong>known gaps</strong>. The eval harness is next, real transcripts are already catalogued as scenarios, and tool and prompt hardening rides those evals. Right now we're judging the plumbing, not the takes.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 24 · what's next -->
+<section class="slide">
+  <div class="slide__label reveal">What's next</div>
+  <h2 class="slide__heading reveal">The runway from here</h2>
+  <div class="cardgrid reveal">
+    <div class="card"><h4>Evals</h4><p>Scenario suite from real transcripts, so prompt and tool tweaks become <strong>measured, not vibes</strong>.</p></div>
+    <div class="card"><h4>Prompt caching</h4><p>Bedrock supports it, the gem's API is merged upstream. Roughly <strong>85 percent off input costs</strong> on tool heavy sessions when it ships.</p></div>
+    <div class="card"><h4>Question chips</h4><p>Canned starter questions in the empty rail, the <strong>onboarding surface</strong>.</p></div>
+    <div class="card"><h4>MCP spike</h4><p>Expose the same tool layer over MCP, and <strong>Claude Code becomes a second client</strong> for free.</p></div>
+  </div>
+</section>
+
+<!-- 25 · close -->
+<section class="slide slide--title">
+  <div class="bg bg--fallback"></div>
+  <div class="content">
+    <div class="slide__label reveal">Kopilot</div>
+    <h2 class="slide__display reveal" style="font-size: clamp(40px, 6.5vw, 88px);">Questions?</h2>
+    <div class="rule reveal"></div>
+    <p class="slide__body reveal" style="margin: 0 auto;">Code computes, the model narrates, and everything stays inside our walls.</p>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var progress = document.getElementById('progress');
+  var counter = document.getElementById('counter');
+  var hints = document.getElementById('hints');
+  var dots = document.getElementById('dots');
+  var current = 0;
+  var lastNav = 0;
+
+  slides.forEach(function (_, i) {
+    var dot = document.createElement('button');
+    dot.className = 'deck-dot';
+    dot.setAttribute('aria-label', 'Slide ' + (i + 1));
+    dot.addEventListener('click', function () { goTo(i); });
+    dots.appendChild(dot);
+  });
+  var dotEls = Array.prototype.slice.call(dots.children);
+
+  function render() {
+    slides.forEach(function (slide, i) { slide.classList.toggle('active', i === current); });
+    dotEls.forEach(function (dot, i) { dot.classList.toggle('active', i === current); });
+    progress.style.width = ((current + 1) / slides.length * 100) + '%';
+    counter.textContent = (current + 1) + ' / ' + slides.length;
+  }
+
+  function goTo(i) {
+    var next = Math.max(0, Math.min(i, slides.length - 1));
+    if (next === current) return;
+    current = next;
+    render();
+    hints.classList.add('faded');
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    var now = Date.now();
+    if (now - lastNav < 120) return;
+    lastNav = now;
+    if (['ArrowRight', 'ArrowDown', ' ', 'PageDown'].indexOf(e.key) !== -1) { e.preventDefault(); goTo(current + 1); }
+    if (['ArrowLeft', 'ArrowUp', 'PageUp'].indexOf(e.key) !== -1) { e.preventDefault(); goTo(current - 1); }
+    if (e.key === 'Home') { e.preventDefault(); goTo(0); }
+    if (e.key === 'End') { e.preventDefault(); goTo(slides.length - 1); }
+  });
+
+  var wheelLock = 0;
+  document.addEventListener('wheel', function (e) {
+    var now = Date.now();
+    if (now - wheelLock < 700 || Math.abs(e.deltaY) < 12) return;
+    wheelLock = now;
+    goTo(current + (e.deltaY > 0 ? 1 : -1));
+  }, { passive: true });
+
+  var touchY = null;
+  document.addEventListener('touchstart', function (e) { touchY = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (touchY === null) return;
+    var delta = touchY - e.changedTouches[0].clientY;
+    if (Math.abs(delta) > 50) goTo(current + (delta > 0 ? 1 : -1));
+    touchY = null;
+  }, { passive: true });
+
+  setTimeout(function () { hints.classList.add('faded'); }, 5000);
+  render();
+})();
+</script>
+</body>
+</html>
